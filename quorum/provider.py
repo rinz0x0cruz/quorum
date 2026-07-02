@@ -122,10 +122,13 @@ def _after(text: str, marker: str) -> str:
 class Provider:
     """Routes a :class:`ModelSpec` + messages to the right endpoint or the mock."""
 
-    def __init__(self, cfg: dict, *, mock: Optional[MockResponder] = None, timeout: int = 60):
+    def __init__(self, cfg: dict, *, mock: Optional[MockResponder] = None, timeout: int = 60,
+                 max_retries: int = 3, backoff: float = 2.5):
         self.cfg = cfg
         self.mock = mock or MockResponder()
         self.timeout = timeout
+        self.max_retries = max_retries      # retries on 429/5xx (free tiers throttle)
+        self.backoff = backoff              # initial backoff seconds (doubles each retry)
 
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
@@ -173,29 +176,48 @@ class Provider:
         if not base:
             return Completion("", spec.model, spec.provider, ok=False,
                               error=f"provider '{spec.provider}' has no base_url")
-        body = json.dumps({
+        payload = json.dumps({
             "model": spec.model, "messages": messages,
             "temperature": temperature, "max_tokens": max_tokens,
         }).encode("utf-8")
-        req = urllib.request.Request(base + "/chat/completions", data=body,
-                                     headers={"Content-Type": "application/json"}, method="POST")
+        headers = {"Content-Type": "application/json"}
         k = api_key(self.cfg, spec.provider)
         if k:
-            req.add_header("Authorization", f"Bearer {k}")
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - configured endpoint
-                data = json.loads(resp.read().decode("utf-8"))
-            text = data["choices"][0]["message"]["content"].strip()
-            usage = data.get("usage", {}) or {}
-            comp = self._finish(spec, messages, text, t0,
-                                tokens_out=usage.get("completion_tokens"))
-            if usage.get("prompt_tokens"):
-                comp.tokens_in = int(usage["prompt_tokens"])
-                comp.cost_usd = cost.price(self.cfg, spec.model, comp.tokens_in, comp.tokens_out)
-            return comp
-        except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
-            return Completion("", spec.model, spec.provider, ok=False,
-                              error=str(e), latency_ms=int((time.time() - t0) * 1000))
+            headers["Authorization"] = f"Bearer {k}"
+
+        delay, last_err = self.backoff, ""
+        for attempt in range(self.max_retries + 1):
+            req = urllib.request.Request(base + "/chat/completions", data=payload,
+                                         headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - configured endpoint
+                    data = json.loads(resp.read().decode("utf-8"))
+                text = data["choices"][0]["message"]["content"].strip()
+                usage = data.get("usage", {}) or {}
+                comp = self._finish(spec, messages, text, t0,
+                                    tokens_out=usage.get("completion_tokens"))
+                if usage.get("prompt_tokens"):
+                    comp.tokens_in = int(usage["prompt_tokens"])
+                    comp.cost_usd = cost.price(self.cfg, spec.model, comp.tokens_in, comp.tokens_out)
+                return comp
+            except urllib.error.HTTPError as e:
+                last_err = f"HTTP {e.code}"
+                if e.code in (429, 500, 502, 503, 504) and attempt < self.max_retries:
+                    ra = e.headers.get("Retry-After") if e.headers else None
+                    time.sleep(min(float(ra) if (ra and str(ra).isdigit()) else delay, 15))
+                    delay *= 2
+                    continue
+                return Completion("", spec.model, spec.provider, ok=False,
+                                  error=last_err, latency_ms=int((time.time() - t0) * 1000))
+            except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
+                last_err = str(e)
+                if attempt < self.max_retries:
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                return Completion("", spec.model, spec.provider, ok=False,
+                                  error=last_err, latency_ms=int((time.time() - t0) * 1000))
+        return Completion("", spec.model, spec.provider, ok=False, error=last_err)
 
     # -- fan-out ----------------------------------------------------------
     def complete_many(self, jobs: list[tuple[ModelSpec, list[dict[str, str]]]], *,
