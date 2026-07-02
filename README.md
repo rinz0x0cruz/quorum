@@ -111,11 +111,11 @@ Any OpenAI-compatible `/chat/completions` endpoint works. Configure a roster of 
 ```yaml
 council:
   members:
-    - { name: alice, provider: openrouter, model: meta-llama/llama-3.1-8b-instruct:free }
+    - { name: alice, provider: openrouter, model: meta-llama/llama-3.3-70b-instruct:free }
     - { name: bob,   provider: ollama,     model: llama3.1 }          # local, keyless
     - { name: carol, provider: openai,     model: gpt-4o-mini }
-  judge:    openrouter:meta-llama/llama-3.3-70b-instruct:free
-  chairman: openrouter:meta-llama/llama-3.3-70b-instruct:free
+  judge:    openrouter:openai/gpt-oss-120b:free
+  chairman: openrouter:openai/gpt-oss-120b:free
 providers:
   openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: QUORUM_OPENROUTER_KEY }
   ollama:     { base_url: http://localhost:11434/v1,    api_key_env: "" }

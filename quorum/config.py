@@ -20,14 +20,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # OpenAI, Groq, ...). These are examples; you own the roster.
     "council": {
         "members": [
-            {"name": "alice", "provider": "openrouter", "model": "meta-llama/llama-3.1-8b-instruct:free"},
-            {"name": "bob",   "provider": "openrouter", "model": "google/gemma-2-9b-it:free"},
-            {"name": "carol", "provider": "openrouter", "model": "mistralai/mistral-7b-instruct:free"},
+            {"name": "alice", "provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct:free"},
+            {"name": "bob",   "provider": "openrouter", "model": "qwen/qwen3-next-80b-a3b-instruct:free"},
+            {"name": "carol", "provider": "openrouter", "model": "google/gemma-4-31b-it:free"},
         ],
         # Single-model roles (referenced as "provider:model"). Empty -> first member.
-        "judge": "openrouter:meta-llama/llama-3.3-70b-instruct:free",
-        "chairman": "openrouter:meta-llama/llama-3.3-70b-instruct:free",
-        "aggregator": "openrouter:meta-llama/llama-3.3-70b-instruct:free",
+        "judge": "openrouter:openai/gpt-oss-120b:free",
+        "chairman": "openrouter:openai/gpt-oss-120b:free",
+        "aggregator": "openrouter:openai/gpt-oss-120b:free",
     },
 
     # Provider profiles: any OpenAI-compatible /chat/completions endpoint. The
