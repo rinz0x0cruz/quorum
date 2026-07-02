@@ -1,0 +1,22 @@
+# quorum
+data/
+*.db
+*.db-journal
+
+# secrets + local config
+.env
+config.yaml
+config.yml
+config.json
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/

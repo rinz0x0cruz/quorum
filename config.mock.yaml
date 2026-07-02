@@ -1,0 +1,23 @@
+# Offline test config: every model routes to the built-in mock provider.
+# Use with:  quorum --config config.mock.yaml run "..."   (no API key needed)
+council:
+  members:
+    - { name: alice, provider: mock, model: meta/mock-alice }
+    - { name: bob,   provider: mock, model: anthropic/mock-bob }
+    - { name: carol, provider: mock, model: google/mock-carol }
+  judge:      mock:openai/mock-judge
+  chairman:   mock:meta/mock-chair
+  aggregator: mock:meta/mock-agg
+
+providers:
+  mock: { base_url: "", api_key_env: "" }
+
+run:
+  strategy: debate
+  max_rounds: 4
+  target_score: 85
+  parallel: false
+
+output:
+  db_path: data/quorum.db
+  dashboard_path: data/dashboard.html

@@ -1,0 +1,6 @@
+# Tiny task set for `quorum bench` demos + offline selftest.
+tasks:
+  - id: capital
+    task: "What is the capital of Australia, and what is the common wrong guess?"
+  - id: bug
+    task: "Given a list, return the second largest distinct value. Note the edge cases."

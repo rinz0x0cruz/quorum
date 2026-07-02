@@ -1,0 +1,65 @@
+# quorum example configuration.
+# Copy to config.yaml and edit. Every key is optional; the values below are the
+# built-in defaults. Secrets never live here -- each provider names an environment
+# variable that holds its key (see .env.example).
+
+# The council: any number of models, across any providers below. Defaults to a
+# trio of FREE OpenRouter models so you can start at zero cost. Add a local
+# Ollama model, OpenAI, Groq, ... -- you own the roster.
+council:
+  members:
+    - { name: alice, provider: openrouter, model: meta-llama/llama-3.1-8b-instruct:free }
+    - { name: bob,   provider: openrouter, model: google/gemma-2-9b-it:free }
+    - { name: carol, provider: openrouter, model: mistralai/mistral-7b-instruct:free }
+  # Single-model roles, referenced as "provider:model". Empty -> first member.
+  judge:      openrouter:meta-llama/llama-3.3-70b-instruct:free
+  chairman:   openrouter:meta-llama/llama-3.3-70b-instruct:free
+  aggregator: openrouter:meta-llama/llama-3.3-70b-instruct:free
+
+# Provider profiles: any OpenAI-compatible /chat/completions endpoint. The
+# built-in "mock" provider is fully offline (used by selftest + replay).
+providers:
+  openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: QUORUM_OPENROUTER_KEY }
+  openai:     { base_url: https://api.openai.com/v1,    api_key_env: QUORUM_OPENAI_KEY }
+  groq:       { base_url: https://api.groq.com/openai/v1, api_key_env: QUORUM_GROQ_KEY }
+  ollama:     { base_url: http://localhost:11434/v1,   api_key_env: "" }   # local, keyless
+  mock:       { base_url: "", api_key_env: "" }                            # offline
+
+run:
+  strategy: debate         # debate | council | moa | refine | ensemble
+  max_rounds: 4            # hard cap on deliberation rounds
+  target_score: 85         # 0-100 "good enough" threshold
+  plateau_delta: 2         # stop if the best score gains < this ...
+  plateau_patience: 2      # ... for this many consecutive rounds
+  consensus: false         # also stop when members converge on one answer
+  moa_layers: 2            # layers for the mixture-of-agents strategy
+  samples: 3               # samples for the ensemble baseline
+  temperature: 0.5
+  max_tokens: 1200
+  anonymize: true          # hide model identities during peer review
+  parallel: true           # fan proposer calls out concurrently
+
+# Phase 1: design + refine the solve-prompt before the council answers.
+promptsmith:
+  enabled: true
+  rounds: 2
+
+judge:
+  # Weighted 0-100 rubric; weights need not sum to 1 (they are normalised).
+  rubric:
+    correctness: 0.40
+    completeness: 0.25
+    clarity: 0.20
+    grounding: 0.15
+  cross_family_guard: true   # prefer a judge from a different vendor than the candidate
+
+cost:
+  budget_usd: 0.50           # abort a run if projected spend exceeds this (0 = no cap)
+  # Per-model price overrides, USD per 1M tokens, e.g.:
+  # pricing:
+  #   openai/gpt-4o: { input: 2.5, output: 10 }
+  pricing: {}
+
+output:
+  db_path: data/quorum.db
+  dashboard_path: data/dashboard.html
