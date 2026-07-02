@@ -60,6 +60,8 @@ class MockResponder:
         user = _last(messages, "user")
         if "QUORUM-JUDGE" in system:
             return self._judge(user)
+        if "QUORUM-GRADER" in system:
+            return self._grade(user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -81,6 +83,10 @@ class MockResponder:
             "best": best,
             "rationale": f"Mock judgment (round {rnd}): candidate {best} is strongest.",
         })
+
+    def _grade(self, user: str) -> str:
+        return json.dumps({"score": 90.0, "correct": True,
+                           "rationale": "Mock grade: candidate matches the reference."})
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

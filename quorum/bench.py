@@ -21,7 +21,7 @@ import os
 import time
 from typing import Any
 
-from . import orchestrator
+from . import grade, orchestrator, provider
 
 
 def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
@@ -30,6 +30,9 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
     if not tasks:
         print(f"  no tasks found in {tasks_path}")
         return 1
+
+    prov = provider.for_config(cfg)
+    graded_mode = any(t.get("reference") for t in tasks)
 
     rows: list[dict[str, Any]] = []
     for task in tasks:
@@ -41,39 +44,57 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
             sess = orchestrator.run_session(rcfg, task["task"], store=store,
                                             strategy=strat, verbose=False)
             secs = time.time() - t0
+
+            match_score, correct, g_cost, g_tokens = None, None, 0.0, 0
+            if task.get("reference"):
+                match_score, correct, gturn = grade.grade(
+                    cfg, prov, task["task"], sess.final, task["reference"], store=store)
+                if gturn:
+                    g_cost, g_tokens = gturn.cost_usd, gturn.tokens_in + gturn.tokens_out
+
             row = {
                 "strategy": strat, "task_id": task["id"], "score": round(sess.final_score, 2),
                 "rounds": len([r for r in sess.rounds if r.index != 0]),
                 "tokens_in": sess.tokens_in, "tokens_out": sess.tokens_out,
-                "tokens": sess.tokens_in + sess.tokens_out,
-                "cost_usd": round(sess.cost_usd, 6), "seconds": round(secs, 3),
+                "tokens": sess.tokens_in + sess.tokens_out + g_tokens,
+                "cost_usd": round(sess.cost_usd + g_cost, 6), "seconds": round(secs, 3),
+                "match": None if match_score is None else round(match_score, 2),
+                "correct": correct,
             }
             rows.append(row)
             store.add_bench_row(strat, task["id"], row["score"], row["rounds"],
                                 row["tokens_in"], row["tokens_out"], row["cost_usd"], row["seconds"])
             if verbose:
+                extra = ""
+                if row["match"] is not None:
+                    mark = "OK" if correct else ("X" if correct is False else "?")
+                    extra = f"  match={row['match']:>5.1f} [{mark}]"
                 print(f"  {task['id']:<14} {strat:<9} score={row['score']:>5.1f}  "
                       f"rounds={row['rounds']}  tokens={row['tokens']:>5}  "
-                      f"cost=${row['cost_usd']:.4f}  {row['seconds']:.2f}s")
+                      f"cost=${row['cost_usd']:.4f}  {row['seconds']:.2f}s{extra}")
 
     summary = aggregate(rows, strategies, len(tasks))
     if as_json:
         print(json.dumps({"rows": rows, "summary": summary}, indent=2))
     else:
-        print("\n" + _table(summary))
+        print("\n" + _table(summary, graded=graded_mode))
     store.add_run("bench", len(rows), "ok")
     return 0
 
 
 def aggregate(rows: list[dict[str, Any]], strategies: list[str], n_tasks: int) -> list[dict[str, Any]]:
-    # wins: per task, the strategy with the highest score (ties -> shared).
+    # Rank metric: match-vs-reference when graded, else the rubric score.
+    def metric(r: dict[str, Any]) -> float:
+        return r["match"] if r.get("match") is not None else r["score"]
+
+    # wins: per task, the strategy with the best metric (ties -> shared).
     wins: dict[str, float] = {s: 0.0 for s in strategies}
     by_task: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         by_task.setdefault(r["task_id"], []).append(r)
     for task_rows in by_task.values():
-        best = max(r["score"] for r in task_rows)
-        leaders = [r for r in task_rows if r["score"] == best]
+        best = max(metric(r) for r in task_rows)
+        leaders = [r for r in task_rows if metric(r) == best]
         for r in leaders:
             wins[r["strategy"]] += 1.0 / len(leaders)
 
@@ -83,7 +104,7 @@ def aggregate(rows: list[dict[str, Any]], strategies: list[str], n_tasks: int) -
         if not sr:
             continue
         k = len(sr)
-        out.append({
+        entry = {
             "strategy": s,
             "mean_score": round(sum(r["score"] for r in sr) / k, 2),
             "win_rate": round(100.0 * wins[s] / max(1, n_tasks), 1),
@@ -91,12 +112,37 @@ def aggregate(rows: list[dict[str, Any]], strategies: list[str], n_tasks: int) -
             "mean_tokens": int(sum(r["tokens"] for r in sr) / k),
             "mean_cost_usd": round(sum(r["cost_usd"] for r in sr) / k, 6),
             "mean_seconds": round(sum(r["seconds"] for r in sr) / k, 3),
-        })
-    out.sort(key=lambda r: (r["mean_score"], r["win_rate"]), reverse=True)
+        }
+        graded = [r for r in sr if r.get("match") is not None]
+        if graded:
+            entry["mean_match"] = round(sum(r["match"] for r in graded) / len(graded), 2)
+            flags = [r["correct"] for r in graded if r.get("correct") is not None]
+            entry["accuracy"] = round(100.0 * sum(1 for f in flags if f) / len(flags), 1) if flags else None
+        out.append(entry)
+
+    rank_key = "mean_match" if any("mean_match" in e for e in out) else "mean_score"
+    out.sort(key=lambda r: (r.get(rank_key, 0) or 0, r["win_rate"]), reverse=True)
     return out
 
 
-def _table(summary: list[dict[str, Any]]) -> str:
+def _table(summary: list[dict[str, Any]], graded: bool = False) -> str:
+    if graded:
+        head = (f"{'strategy':<10} {'match':>6} {'acc%':>6} {'score':>6} {'win%':>6} "
+                f"{'rounds':>7} {'tokens':>7} {'cost$':>9} {'sec':>6}")
+        lines = [head, "-" * len(head)]
+        for r in summary:
+            acc = r.get("accuracy")
+            acc_s = f"{acc:>6.1f}" if acc is not None else f"{'-':>6}"
+            lines.append(f"{r['strategy']:<10} {r.get('mean_match', 0):>6.1f} {acc_s} "
+                         f"{r['mean_score']:>6.1f} {r['win_rate']:>6.1f} {r['mean_rounds']:>7.2f} "
+                         f"{r['mean_tokens']:>7} {r['mean_cost_usd']:>9.4f} {r['mean_seconds']:>6.2f}")
+        if summary:
+            top = summary[0]
+            acc = top.get("accuracy")
+            lines.append(f"\n  winner: {top['strategy']} (match {top.get('mean_match', 0):.1f}"
+                         + (f", accuracy {acc:.0f}%" if acc is not None else "") + ")")
+        return "\n".join(lines)
+
     head = f"{'strategy':<10} {'score':>6} {'win%':>6} {'rounds':>7} {'tokens':>7} {'cost$':>9} {'sec':>6}"
     lines = [head, "-" * len(head)]
     for r in summary:
@@ -126,5 +172,6 @@ def _load_tasks(path: str) -> list[dict[str, Any]]:
             tasks.append({"id": f"t{i + 1}", "task": item})
         elif isinstance(item, dict) and item.get("task"):
             tasks.append({"id": str(item.get("id", f"t{i + 1}")), "task": item["task"],
-                          "rubric": item.get("rubric")})
+                          "rubric": item.get("rubric"),
+                          "reference": item.get("reference") or item.get("expected")})
     return tasks

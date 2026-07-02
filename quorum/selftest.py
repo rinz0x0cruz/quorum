@@ -187,5 +187,15 @@ def run() -> int:
             exporter.run(cfg, store, fmt="csv", session_id=dbg.id, out=csvpath)
             c.ok("csv export ok", os.path.exists(csvpath))
 
+            # --- reference grading (vs expected output) -------------------
+            from . import grade
+            c.ok("gold extract gsm8k", grade.extract_gold("work...\n#### 18") == "18")
+            c.ok("numeric match true", grade.numeric_match("hence 18 total", "#### 18") is True)
+            c.ok("numeric match false", grade.numeric_match("hence 17 total", "#### 18") is False)
+            gs, gc, gt = grade.grade(cfg, prov, "q", "the answer is 18", "#### 18")
+            c.ok("grade numeric deterministic", gs == 100.0 and gc is True and gt is None)
+            ps, _pc, pt = grade.grade(cfg, prov, "q", "text", "a prose reference with several words")
+            c.ok("grade prose via mock grader", ps == 90.0 and pt is not None)
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1
