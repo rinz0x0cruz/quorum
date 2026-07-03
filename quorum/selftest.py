@@ -171,6 +171,10 @@ def run() -> int:
             from . import prompts as _prompts
             _ch = _prompts.challenge("p", "t", "prev", [("a", "x")], "c", True)
             c.ok("challenge builder", len(_ch) == 2 and "devil" in _ch[0]["content"].lower())
+            _pp = _prompts.propose("", "t")
+            c.ok("prompts package re-exports",
+                 len(_pp) == 2 and _pp[0]["content"] == _prompts.PROPOSER_SYSTEM
+                 and "QUORUM-AGGREGATOR" in _prompts.AGGREGATOR_SYSTEM)
             _seen: dict = {}
             _orig_complete = prov.complete
             def _spy(spec, messages, **kw):
