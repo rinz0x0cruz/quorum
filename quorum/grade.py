@@ -77,8 +77,10 @@ def grade(cfg: dict, prov: "provider_mod.Provider", task: str, answer: str, refe
     grader = role_spec(cfg, "judge")
     user = (f"REFERENCE (gold answer):\n{reference}\n\nCANDIDATE answer:\n{answer}\n\n"
             "Return the JSON verdict now.")
+    rf = {"type": "json_object"} if (cfg.get("judge", {}) or {}).get("json_mode") else None
     comp = prov.complete(grader, [{"role": "system", "content": _GRADER_SYSTEM},
-                                  {"role": "user", "content": user}], temperature=0.0, store=store)
+                                  {"role": "user", "content": user}], temperature=0.0,
+                         response_format=rf, store=store)
     payload = _parse_json(comp.text)
     score = float(payload["score"]) if isinstance(payload.get("score"), (int, float)) else 0.0
     score = max(0.0, min(100.0, score))

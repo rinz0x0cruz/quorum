@@ -16,6 +16,9 @@ def run(ctx: Context):
     run = cfg.get("run", {}) or {}
     max_rounds = int(run.get("max_rounds", 4))
     anon = bool(run.get("anonymize", True))
+    # devil's advocate (MAD): one member argues the counter-case from round 2 on,
+    # keeping the debate divergent and avoiding premature consensus.
+    devil = members[-1] if (run.get("devils_advocate") and len(members) >= 2) else None
 
     verdicts = []
     latest: dict[str, str] = {}   # member name -> latest answer
@@ -29,7 +32,12 @@ def run(ctx: Context):
             else:
                 peers = [(nm, latest[nm]) for nm in latest if nm != m.name]
                 critique = verdicts[-1].rationale if verdicts else ""
-                msgs = prompts.revise(ctx.prompt, ctx.task, latest.get(m.name, ""), peers, critique, anon)
+                if m is devil:
+                    msgs = prompts.challenge(ctx.prompt, ctx.task, latest.get(m.name, ""),
+                                             peers, critique, anon)
+                else:
+                    msgs = prompts.revise(ctx.prompt, ctx.task, latest.get(m.name, ""),
+                                          peers, critique, anon)
             jobs.append((m, msgs))
 
         comps = prov.complete_many(jobs, store=ctx.store)
@@ -38,7 +46,8 @@ def run(ctx: Context):
             if not comp.ok:
                 ctx.emit(f"  round {r}: {m.name} failed ({comp.error[:60]})")
                 continue
-            turn = provider.to_turn(comp, r, m.name, "propose" if r == 1 else "revise")
+            kind = "propose" if r == 1 else ("challenge" if m is devil else "revise")
+            turn = provider.to_turn(comp, r, m.name, kind)
             rnd.turns.append(turn)
             ctx.session.account(turn)
             latest[m.name] = comp.text

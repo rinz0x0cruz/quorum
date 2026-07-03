@@ -20,18 +20,39 @@ _SYSTEM = (
 )
 
 
+def _exemplars(cfg: dict, store: Any) -> str:
+    """Few-shot block of instructions that scored well on past tasks (DSPy-style
+    bootstrapping). Empty unless ``promptsmith.bootstrap`` is on and the store has
+    qualifying sessions -- so default behaviour and offline replay are unchanged."""
+    ps = cfg.get("promptsmith", {}) or {}
+    if not ps.get("bootstrap") or store is None or not hasattr(store, "top_sessions"):
+        return ""
+    try:
+        rows = store.top_sessions(limit=int(ps.get("bootstrap_k", 3)),
+                                  min_score=float(ps.get("bootstrap_min", 80.0)))
+    except Exception:  # noqa: BLE001 - bootstrapping is best-effort, never fatal
+        return ""
+    ex = [f"- (scored {r.get('final_score', 0):.0f}) {(r.get('prompt') or '').strip()}"
+          for r in rows if (r.get("prompt") or "").strip()]
+    if not ex:
+        return ""
+    return ("\n\nHere are instructions that solved earlier tasks well; learn from their style, "
+            "do not copy them:\n" + "\n".join(ex))
+
+
 def refine(cfg: dict, prov: "provider_mod.Provider", task: str, *,
            store: Any = None, session: Optional[Session] = None,
            emit: Optional[Callable[[str], None]] = None, verbose: bool = False) -> str:
     rounds = int((cfg.get("promptsmith", {}) or {}).get("rounds", 2))
     smith = role_spec(cfg, "chairman")  # reuse the strongest configured model
     log = emit or ((lambda s: print("  " + s)) if verbose else (lambda s: None))
+    examples = _exemplars(cfg, store)
 
     instruction = ""
     turns = []
     for i in range(1, max(1, rounds) + 1):
         if i == 1:
-            user = f"TASK:\n{task}\n\nWrite the initial solving instruction."
+            user = f"TASK:\n{task}{examples}\n\nWrite the initial solving instruction."
         else:
             user = (f"TASK:\n{task}\n\nCURRENT INSTRUCTION:\n{instruction}\n\n"
                     "Critique it briefly, then output only an improved instruction.")

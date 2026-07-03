@@ -139,6 +139,7 @@ class Provider:
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
                  temperature: Optional[float] = None, max_tokens: Optional[int] = None,
+                 response_format: Optional[dict] = None,
                  store: Any = None, cache: bool = True) -> Completion:
         run = self.cfg.get("run", {}) or {}
         temp = run.get("temperature", 0.5) if temperature is None else temperature
@@ -153,16 +154,29 @@ class Provider:
                 return Completion(hit, spec.model, spec.provider, tin, tout,
                                   cost.price(self.cfg, spec.model, tin, tout))
 
+        comp = self._once(spec, messages, temp, maxt, response_format)
+        # On failure, try this spec's configured alternates in order (e.g. a free
+        # tier returned 429). The winning model is recorded on the Completion, so
+        # it surfaces naturally in the transcript.
+        if not comp.ok:
+            for alt in spec.fallbacks:
+                comp = self._once(alt, messages, temp, maxt, response_format)
+                if comp.ok:
+                    break
+
+        # Cache under the primary key regardless of which model answered, so a
+        # repeated identical call hits the cache (and offline replay is stable).
+        if comp.ok and cache and store is not None and hasattr(store, "ai_cache_put"):
+            store.ai_cache_put(key, comp.model, _last(messages, "user")[:2000], comp.text)
+        return comp
+
+    def _once(self, spec: ModelSpec, messages: list[dict[str, str]], temp: float,
+              maxt: int, response_format: Optional[dict] = None) -> Completion:
+        """One attempt against a single spec (mock or HTTP) -- no fallback, no cache."""
         t0 = time.time()
         if spec.provider == "mock":
-            text = self.mock.respond(spec, messages)
-            comp = self._finish(spec, messages, text, t0)
-        else:
-            comp = self._http(spec, messages, temp, maxt, t0)
-
-        if comp.ok and cache and store is not None and hasattr(store, "ai_cache_put"):
-            store.ai_cache_put(key, spec.model, _last(messages, "user")[:2000], comp.text)
-        return comp
+            return self._finish(spec, messages, self.mock.respond(spec, messages), t0)
+        return self._http(spec, messages, temp, maxt, t0, response_format)
 
     def _finish(self, spec: ModelSpec, messages: list[dict[str, str]], text: str,
                 t0: float, tokens_out: Optional[int] = None) -> Completion:
@@ -176,16 +190,20 @@ class Provider:
         )
 
     def _http(self, spec: ModelSpec, messages: list[dict[str, str]],
-              temperature: float, max_tokens: int, t0: float) -> Completion:
+              temperature: float, max_tokens: int, t0: float,
+              response_format: Optional[dict] = None) -> Completion:
         conf = provider_conf(self.cfg, spec.provider)
         base = (conf.get("base_url", "") or "").rstrip("/")
         if not base:
             return Completion("", spec.model, spec.provider, ok=False,
                               error=f"provider '{spec.provider}' has no base_url")
-        payload = json.dumps({
+        body: dict[str, Any] = {
             "model": spec.model, "messages": messages,
             "temperature": temperature, "max_tokens": max_tokens,
-        }).encode("utf-8")
+        }
+        if response_format:
+            body["response_format"] = response_format
+        payload = json.dumps(body).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         k = api_key(self.cfg, spec.provider)
         if k:

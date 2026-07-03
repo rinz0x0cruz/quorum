@@ -57,7 +57,8 @@ def evaluate(cfg: dict, prov: "provider_mod.Provider", round_index: int, task: s
         {"role": "user", "content": "\n\n".join(parts)},
     ]
 
-    comp = prov.complete(judge, messages, temperature=0.0, store=store)
+    rf = {"type": "json_object"} if (cfg.get("judge", {}) or {}).get("json_mode") else None
+    comp = prov.complete(judge, messages, temperature=0.0, response_format=rf, store=store)
     payload = _parse_json(comp.text)
     score = _overall(payload, rubric)
     best_letter = str(payload.get("best", "A")).strip().upper()[:1]

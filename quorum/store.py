@@ -142,6 +142,16 @@ class Store:
     def session_count(self) -> int:
         return int(self.conn.execute("SELECT COUNT(*) AS n FROM sessions").fetchone()["n"])
 
+    def top_sessions(self, limit: int = 3, min_score: float = 80.0) -> list[dict[str, Any]]:
+        """Highest-scoring past deliberations (with a solve-prompt), for few-shot
+        bootstrapping the prompt engineer."""
+        rows = self.conn.execute(
+            "SELECT task, prompt, final_score FROM sessions "
+            "WHERE final_score >= ? AND prompt IS NOT NULL AND prompt != '' "
+            "ORDER BY final_score DESC LIMIT ?", (min_score, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # ---- AI response cache ---------------------------------------------
     def ai_cache_get(self, key: str) -> Optional[str]:
         r = self.conn.execute("SELECT response FROM ai_cache WHERE key = ?", (key,)).fetchone()

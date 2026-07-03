@@ -33,3 +33,16 @@ def test_dashboard_is_self_contained(tmp_path):
     assert os.path.exists(path)
     html = open(path, "r", encoding="utf-8").read()
     assert "const D =" in html and "__DATA__" not in html
+
+
+def test_top_sessions_filters_by_score(tmp_path):
+    from quorum.model import Session
+    with Store(str(tmp_path / "t.db")) as store:
+        store.save_session(Session(id="hi", task="t", strategy="d",
+                                   prompt="good instruction", final="a", final_score=95.0))
+        store.save_session(Session(id="lo", task="t", strategy="d",
+                                   prompt="weak instruction", final="a", final_score=10.0))
+        store.save_session(Session(id="np", task="t", strategy="d",
+                                   prompt="", final="a", final_score=99.0))  # no prompt -> excluded
+        rows = store.top_sessions(limit=5, min_score=80.0)
+    assert len(rows) == 1 and rows[0]["prompt"] == "good instruction"

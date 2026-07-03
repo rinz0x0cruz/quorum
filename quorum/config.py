@@ -53,15 +53,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 1200,
         "anonymize": True,          # hide model identities during peer review
         "parallel": True,           # fan proposer calls out concurrently
+        "fallbacks": [],            # default alternates ("provider:model") tried when a call fails (e.g. 429)
+        "top_k": 0,                 # if >0, fuse only the top-K peer-ranked candidates (council/moa)
+        "devils_advocate": False,   # debate: have one member argue the counter-case from round 2 on
     },
 
     # Phase 1: design + refine the solve-prompt before the council answers.
-    "promptsmith": {"enabled": True, "rounds": 2},
+    #   bootstrap -> seed the prompt engineer with instructions from past high-scoring sessions.
+    "promptsmith": {"enabled": True, "rounds": 2, "bootstrap": False},
 
     "judge": {
         # Weighted 0-100 rubric; weights need not sum to 1 (they are normalised).
         "rubric": {"correctness": 0.40, "completeness": 0.25, "clarity": 0.20, "grounding": 0.15},
         "cross_family_guard": True,  # prefer a judge from a different vendor than the candidate
+        "json_mode": False,          # ask the judge/grader endpoint for OpenAI JSON mode (opt-in)
     },
 
     "cost": {
@@ -153,15 +158,28 @@ def parse_ref(ref: str) -> tuple[str, str]:
     return provider, model
 
 
+def _parse_fallbacks(refs: Any) -> list[ModelSpec]:
+    """Build leaf :class:`ModelSpec` alternates from ``provider:model`` refs."""
+    out: list[ModelSpec] = []
+    for ref in (refs or []):
+        provider, model = parse_ref(ref)
+        if model:
+            out.append(ModelSpec(name=f"fallback:{model}", provider=provider, model=model))
+    return out
+
+
 def member_specs(cfg: dict) -> list[ModelSpec]:
     members = (cfg.get("council", {}) or {}).get("members", []) or []
+    default_fb = (cfg.get("run", {}) or {}).get("fallbacks", []) or []
     specs: list[ModelSpec] = []
     for i, m in enumerate(members):
+        own_fb = m.get("fallbacks") if isinstance(m, dict) else None
         specs.append(ModelSpec(
             name=m.get("name") or f"m{i + 1}",
             provider=m.get("provider") or "mock",
             model=m.get("model") or "",
             role="proposer",
+            fallbacks=_parse_fallbacks(own_fb if own_fb is not None else default_fb),
         ))
     return specs
 
@@ -169,14 +187,20 @@ def member_specs(cfg: dict) -> list[ModelSpec]:
 def role_spec(cfg: dict, role: str) -> ModelSpec:
     """Resolve a single-model role (judge/chairman/aggregator).
 
-    Falls back to the first council member when the role is unset.
+    Falls back to the first council member when the role is unset. Operational
+    alternates come from ``council.<role>_fallbacks`` or, failing that, the global
+    ``run.fallbacks`` default.
     """
-    ref = (cfg.get("council", {}) or {}).get(role, "") or ""
+    council = cfg.get("council", {}) or {}
+    default_fb = (cfg.get("run", {}) or {}).get("fallbacks", []) or []
+    role_fb = council.get(f"{role}_fallbacks")
+    fb = _parse_fallbacks(role_fb if role_fb is not None else default_fb)
+    ref = council.get(role, "") or ""
     if ref:
         provider, model = parse_ref(ref)
-        return ModelSpec(name=role, provider=provider, model=model, role=role)
+        return ModelSpec(name=role, provider=provider, model=model, role=role, fallbacks=fb)
     members = member_specs(cfg)
     if members:
         first = members[0]
-        return ModelSpec(name=role, provider=first.provider, model=first.model, role=role)
-    return ModelSpec(name=role, provider="mock", model="mock-model", role=role)
+        return ModelSpec(name=role, provider=first.provider, model=first.model, role=role, fallbacks=fb)
+    return ModelSpec(name=role, provider="mock", model="mock-model", role=role, fallbacks=fb)

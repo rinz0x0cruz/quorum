@@ -47,3 +47,31 @@ def test_cross_family_guard_prefers_other_vendor(tmp_path):
         "judge": "mock:openai/gpt-4o"}, judge={"cross_family_guard": True})
     chosen = judge._pick_judge(cfg, ["openai/gpt-4o"])
     assert chosen.model == "anthropic/claude"
+
+
+def _rf_spy(prov, seen):
+    orig = prov.complete
+
+    def spy(spec, messages, **kw):
+        seen["rf"] = kw.get("response_format")
+        return orig(spec, messages, **kw)
+
+    prov.complete = spy  # type: ignore[method-assign]
+
+
+def test_json_mode_passes_response_format(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"), judge={"json_mode": True})
+    prov = provider.for_config(cfg)
+    seen = {}
+    _rf_spy(prov, seen)
+    judge.evaluate(cfg, prov, 1, "task", "prompt", [("a", "ans")], candidate_models=["m"])
+    assert seen["rf"] == {"type": "json_object"}
+
+
+def test_json_mode_off_by_default(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    prov = provider.for_config(cfg)
+    seen = {}
+    _rf_spy(prov, seen)
+    judge.evaluate(cfg, prov, 1, "task", "prompt", [("a", "ans")], candidate_models=["m"])
+    assert seen["rf"] is None

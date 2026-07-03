@@ -110,6 +110,24 @@ def run() -> int:
             many = prov.complete_many(jobs, cache=False)
             c.ok("complete_many order+count", len(many) == len(specs) and all(m.ok for m in many))
 
+            # --- fallback + rank (optimizations) --------------------------
+            fb_cfg = _deep_merge(cfg, {"run": {"fallbacks": ["mock:google/mock-carol"]}})
+            c.ok("member fallbacks resolved",
+                 bool(member_specs(fb_cfg)[0].fallbacks)
+                 and member_specs(fb_cfg)[0].fallbacks[0].provider == "mock")
+            dead = _deep_merge(cfg, {"providers": {"dead": {"base_url": "", "api_key_env": ""}}})
+            dprov = provider.for_config(dead)
+            primary = ModelSpec(name="x", provider="dead", model="dead/m",
+                                fallbacks=[ModelSpec(name="fb", provider="mock", model="mock/fb")])
+            c.ok("fallback used on failure", dprov.complete(
+                primary, [{"role": "user", "content": "hi"}], cache=False).provider == "mock")
+            c.ok("no fallback -> error", dprov.complete(
+                ModelSpec(name="x", provider="dead", model="dead/m"),
+                [{"role": "user", "content": "hi"}], cache=False).ok is False)
+            from . import rank
+            c.ok("rank consensus best-first", rank.consensus_order(3, ["Ranking: B, A, C"])[0] == 1)
+            c.ok("rank top_k limits", rank.top_k_indices(3, ["A, B, C"], 2) == [0, 1])
+
             # --- judge + stop logic ---------------------------------------
             from . import judge
             from .model import Verdict
@@ -136,6 +154,21 @@ def run() -> int:
             c.ok("consensus detects agreement",
                  judge.consensus_reached(["the same answer here", "the same answer here"]) is True)
 
+            # --- challenger builder + json_mode plumb ---------------------
+            from . import prompts as _prompts
+            _ch = _prompts.challenge("p", "t", "prev", [("a", "x")], "c", True)
+            c.ok("challenge builder", len(_ch) == 2 and "devil" in _ch[0]["content"].lower())
+            _seen: dict = {}
+            _orig_complete = prov.complete
+            def _spy(spec, messages, **kw):
+                _seen["rf"] = kw.get("response_format")
+                return _orig_complete(spec, messages, **kw)
+            prov.complete = _spy  # type: ignore[method-assign]
+            judge.evaluate(_deep_merge(cfg, {"judge": {"json_mode": True}}), prov, 1, "t", "p",
+                           [("a", "ans")], candidate_models=["m"], store=store)
+            prov.complete = _orig_complete  # type: ignore[method-assign]
+            c.ok("json_mode passes response_format", _seen.get("rf") == {"type": "json_object"})
+
             # --- strategies (end to end on the mock provider) -------------
             from . import format as fmt
             from . import orchestrator, strategies
@@ -156,6 +189,17 @@ def run() -> int:
             c.ok("no-promptsmith skips round 0",
                  all(r.index != 0 for r in orchestrator.run_session(
                      cfg, "skip ps", store=store, strategy="refine", promptsmith_on=False).rounds))
+
+            # --- top-K fuse + devil's advocate ----------------------------
+            tk = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),
+                "rank then fuse", store=store, strategy="council", promptsmith_on=False)
+            c.ok("top_k council runs", bool(tk.final) and tk.final_score > 0)
+            da = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"devils_advocate": True, "max_rounds": 2, "target_score": 200}}),
+                "argue", store=store, strategy="debate", promptsmith_on=False)
+            c.ok("devil's advocate challenge turn",
+                 any(t.kind == "challenge" for r in da.rounds for t in r.turns))
 
             # --- bench harness --------------------------------------------
             from . import bench
@@ -196,6 +240,15 @@ def run() -> int:
             c.ok("grade numeric deterministic", gs == 100.0 and gc is True and gt is None)
             ps, _pc, pt = grade.grade(cfg, prov, "q", "text", "a prose reference with several words")
             c.ok("grade prose via mock grader", ps == 90.0 and pt is not None)
+
+            # --- promptsmith bootstrap (few-shot from store) --------------
+            store.save_session(Session(id="top1", task="t", strategy="debate",
+                                       prompt="Solve carefully.", final="a", final_score=95.0))
+            c.ok("top_sessions filters", len(store.top_sessions(limit=5, min_score=90.0)) >= 1)
+            from . import promptsmith
+            c.ok("promptsmith bootstrap ok", bool(promptsmith.refine(
+                _deep_merge(cfg, {"promptsmith": {"bootstrap": True, "rounds": 1}}),
+                prov, "new q", store=store)))
 
             # --- embed API (backend for other tools) ----------------------
             from . import api

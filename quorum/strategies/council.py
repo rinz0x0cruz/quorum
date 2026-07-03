@@ -7,7 +7,7 @@ another round. Unlike the single-pass original, this loops until good enough.
 """
 from __future__ import annotations
 
-from .. import cost, judge, prompts, provider
+from .. import cost, judge, prompts, provider, rank
 from ..config import role_spec
 from ..model import Round
 from . import Context
@@ -61,8 +61,16 @@ def run(ctx: Context):
             ctx.session.account(turn)
             reviews.append(comp.text)
 
+        # optional (LLM-Blender): rank by the peer reviews and fuse only the top-K
+        top_k = int(run.get("top_k", 0) or 0)
+        fuse_answers = answers
+        if 0 < top_k < len(answers):
+            idxs = rank.top_k_indices(len(answers), reviews, top_k)
+            fuse_answers = [answers[i] for i in idxs]
+            ctx.emit(f"round {r}: fusing top {len(fuse_answers)} of {len(answers)}")
+
         # 3) chairman synthesis
-        cmsgs = prompts.synthesize(ctx.task, ctx.prompt, answers, reviews, anonymize=anon)
+        cmsgs = prompts.synthesize(ctx.task, ctx.prompt, fuse_answers, reviews, anonymize=anon)
         ccomp = prov.complete(chair, cmsgs, store=ctx.store)
         cturn = provider.to_turn(ccomp, r, "chairman", "synthesize")
         rnd.turns.append(cturn)

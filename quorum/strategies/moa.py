@@ -7,7 +7,7 @@ the last layer into one answer, which the judge scores. Compute is fixed by
 """
 from __future__ import annotations
 
-from .. import judge, prompts, provider
+from .. import judge, prompts, provider, rank
 from ..config import role_spec
 from ..model import Round
 from . import Context
@@ -48,8 +48,25 @@ def run(ctx: Context):
 
     # final aggregation + judge
     agg = role_spec(cfg, "aggregator")
+
+    # optional (LLM-Blender): rank the last layer and aggregate only the top-K.
+    # MoA has no peer reviews, so add one lightweight review call when enabled.
+    top_k = int(run.get("top_k", 0) or 0)
+    fuse = prev
+    if 0 < top_k < len(prev):
+        reviewer = role_spec(cfg, "aggregator")
+        rcomp = prov.complete(reviewer, prompts.review(ctx.task, prev, anonymize=anon),
+                              store=ctx.store)
+        if rcomp.ok:
+            rturn = provider.to_turn(rcomp, layers, "reviewer", "review")
+            ctx.session.rounds[-1].turns.append(rturn)
+            ctx.session.account(rturn)
+            idxs = rank.top_k_indices(len(prev), [rcomp.text], top_k)
+            fuse = [prev[i] for i in idxs]
+            ctx.emit(f"rank: fusing top {len(fuse)} of {len(prev)}")
+
     final_round = Round(index=layers + 1)
-    acomp = prov.complete(agg, prompts.aggregate(ctx.task, ctx.prompt, prev, anonymize=anon),
+    acomp = prov.complete(agg, prompts.aggregate(ctx.task, ctx.prompt, fuse, anonymize=anon),
                           store=ctx.store)
     aturn = provider.to_turn(acomp, layers + 1, "aggregator", "aggregate")
     final_round.turns.append(aturn)

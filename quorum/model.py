@@ -76,12 +76,18 @@ class ModelSpec:
     provider: str             # provider profile key (openrouter, ollama, mock, ...)
     model: str                # model id sent to the endpoint
     role: str = "proposer"    # proposer | judge | chairman | aggregator
+    # Ordered alternates tried, in turn, if this spec's call fails (e.g. a free
+    # tier returns 429). Each is itself a leaf ModelSpec with no further fallbacks.
+    fallbacks: list["ModelSpec"] = field(default_factory=list)
 
     def ref(self) -> str:
         return f"{self.provider}:{self.model}"
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # Only the identifying fields (fallbacks are an operational detail, and
+        # keeping the shape stable avoids leaking nested specs into transcripts).
+        return {"name": self.name, "provider": self.provider,
+                "model": self.model, "role": self.role}
 
 
 @dataclass

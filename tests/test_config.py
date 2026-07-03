@@ -33,3 +33,32 @@ def test_role_falls_back_to_first_member():
     cfg = _deep_merge(DEFAULT_CONFIG, {
         "council": {"members": [{"name": "x", "provider": "mock", "model": "m/x"}], "chairman": ""}})
     assert role_spec(cfg, "chairman").model == "m/x"
+
+
+def test_member_fallbacks_from_run_default():
+    cfg = _deep_merge(DEFAULT_CONFIG, {
+        "council": {"members": [{"name": "x", "provider": "mock", "model": "m/x"}]},
+        "run": {"fallbacks": ["openrouter:alt/model"]}})
+    fbs = member_specs(cfg)[0].fallbacks
+    assert fbs and fbs[0].ref() == "openrouter:alt/model"
+
+
+def test_member_own_fallbacks_override_run_default():
+    cfg = _deep_merge(DEFAULT_CONFIG, {
+        "council": {"members": [
+            {"name": "x", "provider": "mock", "model": "m/x", "fallbacks": ["groq:own/model"]}]},
+        "run": {"fallbacks": ["openrouter:alt/model"]}})
+    fbs = member_specs(cfg)[0].fallbacks
+    assert len(fbs) == 1 and fbs[0].ref() == "groq:own/model"
+
+
+def test_role_fallbacks_resolved():
+    cfg = _deep_merge(DEFAULT_CONFIG, {
+        "council": {"members": [{"name": "x", "provider": "mock", "model": "m/x"}],
+                    "judge": "mock:openai/j", "judge_fallbacks": ["openrouter:jf/model"]}})
+    fbs = role_spec(cfg, "judge").fallbacks
+    assert fbs and fbs[0].ref() == "openrouter:jf/model"
+
+
+def test_no_fallbacks_by_default():
+    assert member_specs(DEFAULT_CONFIG)[0].fallbacks == []

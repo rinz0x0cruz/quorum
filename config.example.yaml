@@ -11,10 +11,15 @@ council:
     - { name: alice, provider: openrouter, model: meta-llama/llama-3.3-70b-instruct:free }
     - { name: bob,   provider: openrouter, model: qwen/qwen3-next-80b-a3b-instruct:free }
     - { name: carol, provider: openrouter, model: google/gemma-4-31b-it:free }
+    # Optionally give a member its own fallback chain (tried in order if its call
+    # fails, e.g. a free tier returns 429). Overrides run.fallbacks for that member.
+    # - { name: dave, provider: openrouter, model: some/model:free, fallbacks: [openrouter:another/model, groq:llama-3.1-70b] }
   # Single-model roles, referenced as "provider:model". Empty -> first member.
   judge:      openrouter:openai/gpt-oss-120b:free
   chairman:   openrouter:openai/gpt-oss-120b:free
   aggregator: openrouter:openai/gpt-oss-120b:free
+  # Per-role fallbacks (optional): judge_fallbacks / chairman_fallbacks / aggregator_fallbacks
+  # judge_fallbacks: [openrouter:google/gemma-4-31b-it:free]
 
 # Provider profiles: any OpenAI-compatible /chat/completions endpoint. The
 # built-in "mock" provider is fully offline (used by selftest + replay).
@@ -38,11 +43,17 @@ run:
   max_tokens: 1200
   anonymize: true          # hide model identities during peer review
   parallel: true           # fan proposer calls out concurrently
+  # Default alternates tried, in order, when a member/role call fails (e.g. free-tier 429).
+  # Applies to any member/role without its own fallbacks, e.g. [openrouter:google/gemma-4-31b-it:free]
+  fallbacks: []
+  top_k: 0                 # if >0, rank candidates and fuse only the top-K (council/moa)
+  devils_advocate: false   # debate: make one member argue the counter-case from round 2 on
 
 # Phase 1: design + refine the solve-prompt before the council answers.
 promptsmith:
   enabled: true
   rounds: 2
+  bootstrap: false         # seed the prompt engineer with instructions from past high-scoring sessions
 
 judge:
   # Weighted 0-100 rubric; weights need not sum to 1 (they are normalised).
@@ -52,6 +63,7 @@ judge:
     clarity: 0.20
     grounding: 0.15
   cross_family_guard: true   # prefer a judge from a different vendor than the candidate
+  json_mode: false           # request OpenAI JSON mode for judge/grader (only if your endpoint supports it)
 
 cost:
   budget_usd: 0.50           # abort a run if projected spend exceeds this (0 = no cap)
