@@ -142,7 +142,51 @@ Secrets never live in config — each provider names an environment variable.
 
 Strategies are plugins. Register your own under the `quorum.strategies` entry-point group (a callable `run(ctx) -> Session`) and it appears automatically in `run` and `bench`.
 
+## Embed it in another tool (replace a single generic AI call)
+
+`quorum` is also a library. Any tool that currently makes one generic model call can route that call through a deliberation instead — self-refine by default, or a full council — while keeping AI **optional**.
+
+Install it into the host tool's environment:
+
+```powershell
+pip install -e path\to\quorum
+```
+
+Add a `quorum:` block to the host's existing `config.yaml` (its `ai:` block supplies the default provider/model/key):
+
+```yaml
+quorum:
+  enabled: true          # off by default -> AI stays optional
+  strategy: refine        # refine | debate | council | moa | ensemble
+  max_rounds: 2
+  # Optional extra council members; omit to just self-refine the tool's own ai.model:
+  members:
+    - { name: a, provider: openrouter, model: google/gemma-4-31b-it:free }
+    - { name: b, provider: openrouter, model: openai/gpt-oss-120b:free }
+  providers:
+    openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: TOOL_OPENROUTER_KEY }
+```
+
+Then delegate at the top of the host's `ai.py::chat` — a 6-line change that preserves the existing single-model fallback:
+
+```python
+def chat(cfg, store, system, user, *, temperature=None):
+    try:
+        from quorum.api import chat as _q
+        out = _q(cfg, store, system, user, temperature=temperature)
+        if out is not None:
+            return out
+    except ImportError:
+        pass
+    # ... existing single-model path, unchanged ...
+```
+
+- **Optional & safe**: if `quorum` isn't installed, `quorum.enabled` is false, or no key is set, `quorum.api.chat` returns `None` and the host falls back to its own behavior — so the tool still runs with zero AI.
+- **Signature-compatible** with the sibling tools' `ai.chat(cfg, store, system, user)`; the host's `system` prompt drives the deliberation (promptsmith is skipped).
+- **Store-friendly**: pass the host's store — quorum reuses its `ai_cache` if present and never requires the session tables.
+
 ## Security
+
 
 Model outputs are fed back into other models' prompts during deliberation, which is a prompt-injection surface (OWASP LLM01). `quorum` always frames peer text as **data to evaluate, not instructions to follow** in the judge/chairman/aggregator system prompts, and the provider never executes anything a model returns. Peer identities are anonymized during review by default (`run.anonymize`).
 

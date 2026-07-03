@@ -145,7 +145,7 @@ class Provider:
         maxt = run.get("max_tokens", 1200) if max_tokens is None else max_tokens
         key = content_hash(spec.provider, spec.model, temp, json.dumps(messages, sort_keys=True))
 
-        if cache and store is not None:
+        if cache and store is not None and hasattr(store, "ai_cache_get"):
             hit = store.ai_cache_get(key)
             if hit is not None:
                 tin = cost.count_messages(messages, spec.model)
@@ -160,7 +160,7 @@ class Provider:
         else:
             comp = self._http(spec, messages, temp, maxt, t0)
 
-        if comp.ok and cache and store is not None:
+        if comp.ok and cache and store is not None and hasattr(store, "ai_cache_put"):
             store.ai_cache_put(key, spec.model, _last(messages, "user")[:2000], comp.text)
         return comp
 

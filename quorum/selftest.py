@@ -197,5 +197,19 @@ def run() -> int:
             ps, _pc, pt = grade.grade(cfg, prov, "q", "text", "a prose reference with several words")
             c.ok("grade prose via mock grader", ps == 90.0 and pt is not None)
 
+            # --- embed API (backend for other tools) ----------------------
+            from . import api
+            host = {"ai": {"provider": "mock", "model": "mock/m1", "max_tokens": 200, "api_key_env": ""},
+                    "quorum": {"enabled": True, "strategy": "refine", "max_rounds": 2}}
+            c.ok("api.enabled on", api.enabled(host) is True)
+            host_off = {**host, "quorum": {**host["quorum"], "enabled": False}}
+            c.ok("api.enabled off", api.enabled(host_off) is False)
+            qc = api.build_config(host)
+            c.ok("api build_config", qc["run"]["strategy"] == "refine"
+                 and qc["promptsmith"]["enabled"] is False)
+            out = api.chat(host, store, "You are precise.", "Say hello.")
+            c.ok("api.chat returns text", isinstance(out, str) and len(out) > 0)
+            c.ok("api.chat disabled -> None", api.chat(host_off, store, "s", "u") is None)
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1
