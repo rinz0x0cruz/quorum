@@ -12,6 +12,7 @@ ensemble), otherwise the server's configured ``run.strategy`` is used.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import copy
 import json
 import time
@@ -20,6 +21,8 @@ from typing import Any
 
 from . import orchestrator
 from .strategies import available as strategies_available
+
+MAX_BODY = 1_000_000  # 1 MB request cap
 
 
 def _extract(messages: list[dict[str, Any]]) -> tuple[str, str]:
@@ -60,7 +63,8 @@ def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
     }
 
 
-def run(cfg: dict, port: int = 8802, token: str = "") -> int:
+def make_server(cfg: dict, host: str = "127.0.0.1", port: int = 8802, token: str = "",
+                request_timeout: float = 120.0) -> ThreadingHTTPServer:
     default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
 
     class Handler(BaseHTTPRequestHandler):
@@ -71,6 +75,21 @@ def run(cfg: dict, port: int = 8802, token: str = "") -> int:
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _send_sse(self, obj: dict) -> None:
+            content = obj["choices"][0]["message"]["content"]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            base = {"id": obj["id"], "object": "chat.completion.chunk",
+                    "created": obj["created"], "model": obj["model"]}
+            first = {**base, "choices": [{"index": 0, "finish_reason": None,
+                                          "delta": {"role": "assistant", "content": content}}]}
+            last = {**base, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+            for evt in (first, last):
+                self.wfile.write(f"data: {json.dumps(evt)}\n\n".encode("utf-8"))
+            self.wfile.write(b"data: [DONE]\n\n")
 
         def _auth_ok(self) -> bool:
             return not token or self.headers.get("Authorization", "") == f"Bearer {token}"
@@ -91,21 +110,40 @@ def run(cfg: dict, port: int = 8802, token: str = "") -> int:
                 return self._send(401, {"error": {"message": "unauthorized"}})
             try:
                 n = int(self.headers.get("Content-Length", "0") or 0)
+                if n > MAX_BODY:
+                    return self._send(413, {"error": {"message": "payload too large"}})
                 req = json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
             except (ValueError, TypeError):
                 return self._send(400, {"error": {"message": "invalid JSON"}})
-            code, obj = complete_chat(cfg, req)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(complete_chat, cfg, req)
+                try:
+                    code, obj = fut.result(timeout=request_timeout)
+                except concurrent.futures.TimeoutError:
+                    return self._send(504, {"error": {"message": "deliberation timed out"}})
+            if code == 200 and req.get("stream"):
+                return self._send_sse(obj)
             self._send(code, obj)
 
         def log_message(self, *args) -> None:  # keep the console quiet
             pass
 
-    with ThreadingHTTPServer(("127.0.0.1", port), Handler) as httpd:
-        note = ", token required" if token else ""
-        print(f"  quorum OpenAI-compatible API at http://127.0.0.1:{port}/v1  "
-              f"(strategy={default_strategy}{note})  Ctrl+C to stop")
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\n  stopped")
+    return ThreadingHTTPServer((host, port), Handler)
+
+
+def run(cfg: dict, port: int = 8802, token: str = "", host: str = "127.0.0.1",
+        request_timeout: float = 120.0) -> int:
+    default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
+    insecure = host not in ("127.0.0.1", "localhost", "::1") and not token
+    httpd = make_server(cfg, host=host, port=port, token=token, request_timeout=request_timeout)
+    note = ", token required" if token else ""
+    warn = "\n  [!] bound to a non-loopback host WITHOUT a token -- set --token" if insecure else ""
+    print(f"  quorum OpenAI-compatible API at http://{host}:{port}/v1  "
+          f"(strategy={default_strategy}{note}){warn}  Ctrl+C to stop")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n  stopped")
+    finally:
+        httpd.server_close()
     return 0

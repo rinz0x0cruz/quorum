@@ -185,6 +185,50 @@ def chat(cfg, store, system, user, *, temperature=None):
 - **Signature-compatible** with the sibling tools' `ai.chat(cfg, store, system, user)`; the host's `system` prompt drives the deliberation (promptsmith is skipped).
 - **Store-friendly**: pass the host's store — quorum reuses its `ai_cache` if present and never requires the session tables.
 
+## Use it from any language / environment
+
+Beyond the Python library, quorum exposes two language-agnostic surfaces.
+
+### OpenAI-compatible proxy (any language, incl. Go/Rust)
+Run a local server that deliberates per request and answers in the OpenAI shape:
+```powershell
+quorum serve --api --port 8802            # add --token <secret> to require auth; --host 0.0.0.0 to expose
+```
+Point any OpenAI client's `base_url` at `http://127.0.0.1:8802/v1` and pass a strategy name as the `model` (`refine`, `debate`, `council`, `moa`, `ensemble`). `stream: true` and a per-request `--timeout` are supported.
+
+**Docker** (zero local Python):
+```bash
+docker build -t quorum .
+docker run --rm -p 8802:8802 -e QUORUM_OPENROUTER_KEY=sk-or-... \
+  -v "$PWD/config.yaml:/app/config.yaml:ro" quorum
+```
+
+**Rust** (through the proxy, e.g. with `reqwest` or any OpenAI client):
+```rust
+let body = serde_json::json!({
+    "model": "refine",
+    "messages": [{"role":"system","content":"be terse"},
+                 {"role":"user","content":"summarize this CVE"}],
+});
+let r: serde_json::Value = reqwest::Client::new()
+    .post("http://127.0.0.1:8802/v1/chat/completions")
+    .json(&body).send().await?.json().await?;
+let answer = &r["choices"][0]["message"]["content"];
+```
+
+### Subprocess one-shot (CI, no daemon)
+For unattended/CI use where running a server is awkward, spawn a one-shot — stdout is the answer:
+```bash
+quorum chat --system "be terse" --user "summarize this CVE" --strategy refine
+echo "summarize this CVE" | quorum chat --system "be terse" --json   # {content, tokens, cost_usd, ...}
+```
+Any language can `exec` it (Rust `std::process::Command`, Go `os/exec`). The exit code is non-zero when no answer is produced, so callers can fall back.
+
+### Install pinned to a version
+```bash
+pip install "quorum @ git+https://github.com/rinz0x0cruz/quorum@v0.1.0"
+```
+
 ## Security
 
 

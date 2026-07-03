@@ -120,9 +120,28 @@ def cmd_dashboard(args, cfg):
 def cmd_serve(args, cfg):
     if getattr(args, "api", False):
         from . import serveapi
-        return serveapi.run(cfg, port=args.port, token=args.token)
+        return serveapi.run(cfg, port=args.port, token=args.token,
+                            host=args.host, request_timeout=args.timeout)
     from . import serve
     return serve.run(cfg, port=args.port, open_browser=args.open)
+
+
+def cmd_chat(args, cfg):
+    """One-shot deliberation for scripts/CI/other languages (stdout = the answer)."""
+    import sys
+    from . import orchestrator
+    user = args.user if args.user is not None else sys.stdin.read()
+    session = orchestrator.run_session(cfg, user, solve_prompt=args.system or "",
+                                       promptsmith_on=False, strategy=args.strategy, verbose=False)
+    if args.json:
+        import json
+        print(json.dumps({"content": session.final, "strategy": session.strategy,
+                          "status": session.status, "stop_reason": session.stop_reason,
+                          "tokens": session.tokens_in + session.tokens_out,
+                          "cost_usd": round(session.cost_usd, 6)}))
+    else:
+        print(session.final)
+    return 0 if (session.status == "ok" and session.final) else 1
 
 
 def cmd_export(args, cfg):
@@ -195,7 +214,21 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--api", action="store_true",
                     help="Serve an OpenAI-compatible /v1/chat/completions endpoint (deliberates per request)")
     sp.add_argument("--token", default="", help="Optional bearer token required by --api")
+    sp.add_argument("--host", default="127.0.0.1", help="Bind host for --api (use 0.0.0.0 in Docker)")
+    sp.add_argument("--timeout", type=float, default=120.0,
+                    help="Per-request deliberation timeout in seconds for --api")
     sp.set_defaults(func=cmd_serve)
+
+    sp = sub.add_parser("chat",
+                        help="One-shot deliberation of a system+user prompt (for scripts/CI/other languages)")
+    sp.add_argument("--user", default=None, help="User message (default: read from stdin)")
+    sp.add_argument("--system", default="", help="System / instruction prompt")
+    sp.add_argument("--strategy", default=None,
+                    choices=["debate", "council", "moa", "refine", "ensemble"],
+                    help="Override the configured strategy")
+    sp.add_argument("--json", action="store_true",
+                    help="Emit JSON {content, strategy, status, tokens, cost_usd}")
+    sp.set_defaults(func=cmd_chat)
 
     sp = sub.add_parser("export", help="Export a session as JSON, CSV, or Markdown")
     sp.add_argument("--format", choices=["json", "csv", "md"], default="json")

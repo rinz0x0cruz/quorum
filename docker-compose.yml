@@ -1,0 +1,16 @@
+# Run the quorum OpenAI-compatible proxy as a container.
+#   QUORUM_OPENROUTER_KEY=sk-or-...  docker compose up
+# Provide a config.yaml (council/providers) next to this file.
+services:
+  quorum:
+    build: .
+    image: quorum:latest
+    ports:
+      - "8802:8802"
+    environment:
+      - QUORUM_OPENROUTER_KEY=${QUORUM_OPENROUTER_KEY:-}
+      - QUORUM_OPENAI_KEY=${QUORUM_OPENAI_KEY:-}
+      - QUORUM_GROQ_KEY=${QUORUM_GROQ_KEY:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
