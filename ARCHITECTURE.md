@@ -58,9 +58,10 @@ Grouped by layer (all under `quorum/quorum/`).
 | `judge.py` | Score a round vs a rubric; decide when to stop | `evaluate`, `should_stop`, `consensus_reached` |
 | `prompts.py` | System prompts + message builders (framed DATA-not-instructions) | `propose`, `revise`, `challenge`, `synthesize`, `aggregate`, ... |
 | `promptsmith.py` | Phase-1 OPRO prompt refinement + few-shot bootstrap | `refine`, `_exemplars` |
-| `rank.py` | Rank candidates from peer reviews; lexical doc select | `consensus_order`, `top_k_indices`, `select` |
+| `rank.py` | Rank candidates from peer reviews (Borda over reviewer orderings) | `consensus_order`, `top_k_indices` |
 | `contextwindow.py` | Pack caller history + grounding docs into a DATA-framed preamble | `ContextDoc`, `pack`, `select`, `preamble` |
 | `grade.py` | Reference-based grading (numeric/deterministic or AI grader) | `numeric_match`, `extract_gold`, `grade` |
+| `scoring/` | Shared lexical text-scoring primitives + a `Scorer` protocol & registry (leaf) | `tokens`, `overlap_coeff`, `jaccard`, `LexicalScorer`, `register`/`get`/`available` |
 
 ### Domain & data
 | Module | Responsibility | Key symbols |
@@ -249,7 +250,7 @@ shippable; none changes behavior.
 |---|---|---|---|---|
 | 1 | ~~`run.*` re-parsed in every strategy~~ | **Shipped**: typed `RunOptions` resolved once in the orchestrator, hung on `Context` | `strategies/__init__.py`, `orchestrator.py`, `strategies/*` | ✅ done |
 | 2 | ~~orchestrator hard-codes its stages~~ | **Shipped**: pre/post `hooks` around the strategy | `hooks.py`, `orchestrator.py` | ✅ done |
-| 3 | "Score/rank text" logic is split four ways | A **`scoring/` package** with a common scorer protocol + registry (lexical, rubric-LLM, reference-numeric, embedding-later); `judge`/`grade` become evaluators, `rank`/`contextwindow.select` share the scorers | `judge.py`, `grade.py`, `rank.py`, `contextwindow.py` | Medium |
+| 3 | ~~lexical text-scoring split across callers~~ | **Shipped**: a `scoring/` package -- shared dependency-free primitives (`tokens`, `overlap_coeff`, `jaccard`) + a `Scorer` protocol & registry (built-in `lexical`, `quorum.scorers` entry points); `contextwindow.select` and `judge.consensus_reached` share them. The LLM rubric-judge / reference-grader can join the registry later | `scoring/`, `contextwindow.py`, `judge.py` | ✅ done |
 | 4 | `api.build_config` and serveapi request-mapping both translate *external → quorum* | One **`adapters` module** with a host-config mapper + a request mapper, reused by both surfaces | `api.py`, `serveapi.py` | Medium |
 | 5 | `prompts.py` is a flat grab-bag; strategy-specific builders (e.g. `challenge`) bloat it | Co-locate builders with their strategy (or a `prompts/` package by role); keep the shared DATA/LLM01 framing in one helper | `prompts.py`, `strategies/*` | Medium |
 | 6 | `provider.py` bundles routing + transport (retry/fallback/json-mode) + accounting | Split a **transport** layer from a `Provider` protocol so alternate backends (embeddings, streaming, optional litellm) register like strategies | `provider.py` | Low* |
@@ -259,9 +260,9 @@ shippable; none changes behavior.
 \* Low unless a non-OpenAI or multi-backend provider lands on the roadmap — then #6 jumps to High.
 
 ### Suggested near-term order
-**#1 (RunOptions)** and **#2 (hook pipeline)** are shipped — together they cover
-the two commonest shapes of a new feature (a new *knob* → #1, a new *stage* →
-#2). Next up: **#3 (scoring package)** the next time retrieval/eval grows, then
+**#1 (RunOptions)**, **#2 (hook pipeline)**, and **#3 (scoring package)** are
+shipped -- together they cover the commonest shapes of a new feature (a new *knob*
+-> #1, a new *stage* -> #2, a new *text-scoring measure* -> #3). Next up:
 **#4 (adapters)** the next time a new host integrates.
 
 ---

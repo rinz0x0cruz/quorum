@@ -10,6 +10,10 @@ Two paths:
 
 Both return ``(score 0-100, correct: bool|None, Turn|None)`` so the benchmark can
 report accuracy and fold any grading cost into the row.
+
+(Future: reference grading is a natural member of the :mod:`quorum.scoring`
+registry -- a ``"reference"`` scorer alongside the ``"lexical"`` one -- but it is
+left as-is here until that unification is needed.)
 """
 from __future__ import annotations
 

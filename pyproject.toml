@@ -31,6 +31,12 @@ moa = "quorum.strategies.moa:run"
 refine = "quorum.strategies.refine:run"
 ensemble = "quorum.strategies.ensemble:run"
 
+# Text scorers are plugins too: register a class or instance resolving to a
+# ``Scorer`` (``score(query, text) -> float`` in 0..1) in this group. The built-in
+# ``lexical`` scorer is also registered in-process, so it works with no install.
+[project.entry-points."quorum.scorers"]
+lexical = "quorum.scoring:LexicalScorer"
+
 [tool.setuptools.packages.find]
 include = ["quorum*"]
 

@@ -56,6 +56,19 @@ def run() -> int:
     c.ok("vendor maps gpt", model_vendor("openai/gpt-4o") == "openai")
     c.ok("modelspec ref", ModelSpec("j", "mock", "x/y").ref() == "mock:x/y")
 
+    # --- scoring (leaf lexical primitives + registry) ---------------------
+    from . import scoring
+    c.ok("scoring tokenizes", scoring.tokens("Hello, WORLD 42!") == {"hello", "world", "42"})
+    # overlap_coeff (rank/contextwindow) is asymmetric; jaccard (consensus) is
+    # symmetric -- same inputs, different results proves they are NOT the same formula.
+    c.ok("overlap_coeff |q&d|/|q|", scoring.overlap_coeff({"a", "b"}, {"a", "b", "c", "d"}) == 1.0)
+    c.ok("jaccard |a&b|/|a|b|", scoring.jaccard({"a", "b"}, {"a", "b", "c", "d"}) == 0.5)
+    c.ok("overlap empty-query -> 0", scoring.overlap_coeff(set(), {"a"}) == 0.0)
+    c.ok("registry resolves lexical", "lexical" in scoring.available()
+         and isinstance(scoring.get("lexical"), scoring.Scorer))
+    c.ok("LexicalScorer scores via overlap",
+         scoring.get("lexical").score("a b", "a b c d") == 1.0)
+
     # --- config -----------------------------------------------------------
     from .config import DEFAULT_CONFIG, _deep_merge, load_config, member_specs, parse_ref, role_spec
     merged = _deep_merge(DEFAULT_CONFIG, {"run": {"target_score": 5}})

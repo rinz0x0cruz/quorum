@@ -21,6 +21,7 @@ import re
 from typing import Any, Optional
 
 from . import provider as provider_mod
+from . import scoring
 from .config import role_spec
 from .model import ModelSpec, Turn, Verdict, model_vendor
 
@@ -104,13 +105,13 @@ def consensus_reached(contents: list[str], threshold: float = 0.8) -> bool:
     texts = [c for c in contents if c]
     if len(texts) < 2:
         return False
-    sets = [set(re.findall(r"[a-z0-9]+", t.lower())) for t in texts]
+    sets = [scoring.tokens(t) for t in texts]
     sims, pairs = 0.0, 0
     for i in range(len(sets)):
         for j in range(i + 1, len(sets)):
             union = sets[i] | sets[j]
             if union:
-                sims += len(sets[i] & sets[j]) / len(union)
+                sims += scoring.jaccard(sets[i], sets[j])
                 pairs += 1
     return pairs > 0 and (sims / pairs) >= threshold
 
