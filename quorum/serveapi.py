@@ -20,7 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from . import adapters, orchestrator
-from .adapters import split_messages as _split
 from .strategies import available as strategies_available
 
 MAX_BODY = 1_000_000  # 1 MB request cap
