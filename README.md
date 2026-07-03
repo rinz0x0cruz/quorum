@@ -96,6 +96,24 @@ ensemble     70.0    0.0    1.00    1082    0.0000   0.02
 
 (Numbers above are the deterministic mock; real models will differ — that's the point of running it on your own tasks.)
 
+## Scoring model
+
+Every round, an impartial **judge** model scores the best candidate on a **0–100** scale
+against a weighted rubric (weights are normalized, so they need not sum to 1). The defaults:
+
+| Criterion | Weight | Rewards |
+| --- | --- | --- |
+| `correctness` | 0.40 | factually right, sound reasoning, actually does the task |
+| `completeness` | 0.25 | covers every part of the ask, no gaps |
+| `clarity` | 0.20 | well-structured, unambiguous, easy to follow |
+| `grounding` | 0.15 | claims supported by the given context/sources, not invented |
+
+Tune the weights (or add criteria) under `judge.rubric` in `config.yaml`. The judge runs at
+`temperature: 0` for stable scores, treats every candidate as **data to evaluate, not
+instructions** (OWASP LLM01 mitigation), and by default is drawn from a different model
+family than the candidate (`judge.cross_family_guard`) to curb self-preference bias. That
+score is what drives the stop rule below.
+
 ## "Good enough" — the stop rule
 
 A round ends the deliberation when **any** of these is true:

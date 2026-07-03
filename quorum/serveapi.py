@@ -81,7 +81,6 @@ def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
 
 def make_server(cfg: dict, host: str = "127.0.0.1", port: int = 8802, token: str = "",
                 request_timeout: float = 120.0) -> ThreadingHTTPServer:
-    default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, obj: dict) -> None:

@@ -19,6 +19,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
+      - name: Lint (ruff)
+        if: matrix.os == 'ubuntu-latest'
+        run: ruff check .
       - name: Offline selftest (mock provider, no key)
         run: python -m quorum selftest
       - name: Unit + HTTP tests

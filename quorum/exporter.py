@@ -62,7 +62,7 @@ def _write_md(path: str, d: dict[str, Any]) -> None:
              f"- **score**: {d['final_score']:.1f}",
              f"- **cost**: ${d['cost_usd']:.4f} · **tokens**: {d['tokens_in'] + d['tokens_out']}",
              f"- **stop**: {d.get('stop_reason', '')} · **status**: {d.get('status', 'ok')}",
-             "", f"## Task", "", d["task"], ""]
+             "", "## Task", "", d["task"], ""]
     if d.get("prompt") and d["prompt"].strip() != d["task"].strip():
         lines += ["## Refined prompt", "", d["prompt"], ""]
     for r in d.get("rounds", []):
