@@ -1,5 +1,7 @@
 # quorum
 
+[![ci](https://github.com/rinz0x0cruz/quorum/actions/workflows/ci.yml/badge.svg)](https://github.com/rinz0x0cruz/quorum/actions/workflows/ci.yml)
+
 **Put several AI models in a room, refine a prompt together, then debate a solution until it's good enough.**
 
 `quorum` is a small, provider-agnostic CLI that runs a *deliberation* between multiple language models. It first **designs and refines the prompt** (phase 1), then bounces a solution between the models — proposing, critiquing, and revising — while a **judge scores every round** and stops when the answer crosses a quality bar (or plateaus, or hits a round cap). Three deliberation strategies ship in the box, plus two cheap baselines, and a **benchmark harness** tells you which one actually wins on *your* tasks.
@@ -134,6 +136,8 @@ Secrets never live in config — each provider names an environment variable.
 | `quorum list` / `quorum show <id>` | Browse past deliberations |
 | `quorum dashboard [--open]` | Build the offline HTML transcript browser |
 | `quorum serve [--open]` | Serve the dashboard on `127.0.0.1:8802` |
+| `quorum serve --api [--host --port --token --timeout]` | OpenAI-compatible `/v1/chat/completions` endpoint (deliberates per request) |
+| `quorum chat --system "…" --user "…" [--json --strategy X]` | One-shot deliberation for scripts / CI / other languages |
 | `quorum export [--format json\|csv\|md] [--session id]` | Export a transcript |
 | `quorum models [--ping]` | List the council (and check reachability) |
 | `quorum selftest` | Offline self-tests (no network, no keys) |
@@ -202,6 +206,7 @@ docker build -t quorum .
 docker run --rm -p 8802:8802 -e QUORUM_OPENROUTER_KEY=sk-or-... \
   -v "$PWD/config.yaml:/app/config.yaml:ro" quorum
 ```
+No registry needed — CI builds the image and uploads it as a `quorum-docker-image` artifact; download it from the latest [Actions run](https://github.com/rinz0x0cruz/quorum/actions) and `docker load < quorum-image.tar.gz`.
 
 **Rust** (through the proxy, e.g. with `reqwest` or any OpenAI client):
 ```rust
