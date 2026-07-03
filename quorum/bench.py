@@ -45,8 +45,9 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
                                             strategy=strat, verbose=False)
             secs = time.time() - t0
 
+            errored = (sess.status != "ok") or not (sess.final or "").strip()
             match_score, correct, g_cost, g_tokens = None, None, 0.0, 0
-            if task.get("reference"):
+            if task.get("reference") and not errored:
                 match_score, correct, gturn = grade.grade(
                     cfg, prov, task["task"], sess.final, task["reference"], store=store)
                 if gturn:
@@ -59,16 +60,19 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
                 "tokens": sess.tokens_in + sess.tokens_out + g_tokens,
                 "cost_usd": round(sess.cost_usd + g_cost, 6), "seconds": round(secs, 3),
                 "match": None if match_score is None else round(match_score, 2),
-                "correct": correct,
+                "correct": correct, "error": errored,
             }
             rows.append(row)
             store.add_bench_row(strat, task["id"], row["score"], row["rounds"],
                                 row["tokens_in"], row["tokens_out"], row["cost_usd"], row["seconds"])
             if verbose:
-                extra = ""
-                if row["match"] is not None:
+                if errored and task.get("reference"):
+                    extra = "  [ERR: no answer / throttled]"
+                elif row["match"] is not None:
                     mark = "OK" if correct else ("X" if correct is False else "?")
                     extra = f"  match={row['match']:>5.1f} [{mark}]"
+                else:
+                    extra = ""
                 print(f"  {task['id']:<14} {strat:<9} score={row['score']:>5.1f}  "
                       f"rounds={row['rounds']}  tokens={row['tokens']:>5}  "
                       f"cost=${row['cost_usd']:.4f}  {row['seconds']:.2f}s{extra}")
@@ -118,6 +122,8 @@ def aggregate(rows: list[dict[str, Any]], strategies: list[str], n_tasks: int) -
             entry["mean_match"] = round(sum(r["match"] for r in graded) / len(graded), 2)
             flags = [r["correct"] for r in graded if r.get("correct") is not None]
             entry["accuracy"] = round(100.0 * sum(1 for f in flags if f) / len(flags), 1) if flags else None
+        entry["errors"] = sum(1 for r in sr if r.get("error"))
+        entry["served"] = len(graded)
         out.append(entry)
 
     rank_key = "mean_match" if any("mean_match" in e for e in out) else "mean_score"
@@ -127,20 +133,22 @@ def aggregate(rows: list[dict[str, Any]], strategies: list[str], n_tasks: int) -
 
 def _table(summary: list[dict[str, Any]], graded: bool = False) -> str:
     if graded:
-        head = (f"{'strategy':<10} {'match':>6} {'acc%':>6} {'score':>6} {'win%':>6} "
+        head = (f"{'strategy':<10} {'match':>6} {'acc%':>6} {'err':>4} {'score':>6} {'win%':>6} "
                 f"{'rounds':>7} {'tokens':>7} {'cost$':>9} {'sec':>6}")
         lines = [head, "-" * len(head)]
         for r in summary:
             acc = r.get("accuracy")
             acc_s = f"{acc:>6.1f}" if acc is not None else f"{'-':>6}"
             lines.append(f"{r['strategy']:<10} {r.get('mean_match', 0):>6.1f} {acc_s} "
-                         f"{r['mean_score']:>6.1f} {r['win_rate']:>6.1f} {r['mean_rounds']:>7.2f} "
-                         f"{r['mean_tokens']:>7} {r['mean_cost_usd']:>9.4f} {r['mean_seconds']:>6.2f}")
+                         f"{r.get('errors', 0):>4} {r['mean_score']:>6.1f} {r['win_rate']:>6.1f} "
+                         f"{r['mean_rounds']:>7.2f} {r['mean_tokens']:>7} {r['mean_cost_usd']:>9.4f} "
+                         f"{r['mean_seconds']:>6.2f}")
         if summary:
             top = summary[0]
             acc = top.get("accuracy")
-            lines.append(f"\n  winner: {top['strategy']} (match {top.get('mean_match', 0):.1f}"
-                         + (f", accuracy {acc:.0f}%" if acc is not None else "") + ")")
+            note = f", accuracy {acc:.0f}% over {top.get('served', 0)} served" if acc is not None else ""
+            errs = f"; {top.get('errors', 0)} errored/throttled" if top.get("errors") else ""
+            lines.append(f"\n  winner: {top['strategy']} (match {top.get('mean_match', 0):.1f}{note}{errs})")
         return "\n".join(lines)
 
     head = f"{'strategy':<10} {'score':>6} {'win%':>6} {'rounds':>7} {'tokens':>7} {'cost$':>9} {'sec':>6}"
