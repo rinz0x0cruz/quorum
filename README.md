@@ -206,6 +206,8 @@ def chat(cfg, store, system, user, *, temperature=None):
 - **Optional & safe**: if `quorum` isn't installed, `quorum.enabled` is false, or no key is set, `quorum.api.chat` returns `None` and the host falls back to its own behavior — so the tool still runs with zero AI.
 - **Signature-compatible** with the sibling tools' `ai.chat(cfg, store, system, user)`; the host's `system` prompt drives the deliberation (promptsmith is skipped).
 - **Store-friendly**: pass the host's store — quorum reuses its `ai_cache` if present and never requires the session tables.
+- **Per-call strategy**: pass `strategy=` to `api.chat` to choose the deliberation for *one* call — `council`/`debate` for a high-stakes answer, `ensemble` for a discrete classification — overriding the host's configured `quorum.strategy`.
+- **Second-opinion scoring**: `api.score(cfg, store, task, candidate, *, rubric=None)` runs quorum's rubric judge over a single answer and returns `{"score", "sub_scores", "rationale"}` (or `None` when off) — a tool with its own deterministic ranker can use it as an optional cross-check without touching its core scoring.
 
 ## Use it from any language / environment
 

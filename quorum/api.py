@@ -91,13 +91,16 @@ def deliberate(task: str, *, system: Optional[str] = None, cfg: Optional[dict] =
 
 
 def chat(cfg: dict, store: Any, system: str, user: str, *,
-         temperature: Optional[float] = None,
+         temperature: Optional[float] = None, strategy: Optional[str] = None,
          history: Optional[list] = None, context: Optional[list] = None) -> Optional[str]:
     """Drop-in for a sibling tool's ``ai.chat`` -- deliberate, or ``None`` if off.
 
     Signature-compatible so a host's ``ai.chat`` can delegate here first and fall
     back to its own single-model path when this returns ``None``. Hosts that need
-    memory may also pass ``history`` and/or ``context`` (both optional).
+    memory may also pass ``history`` and/or ``context`` (both optional). Pass
+    ``strategy`` to choose the deliberation strategy for *this* call (e.g.
+    ``council`` for a high-stakes answer, ``ensemble`` for a discrete
+    classification); when omitted the host's configured ``quorum.strategy`` is used.
     """
     if not enabled(cfg):
         return None
@@ -105,5 +108,33 @@ def chat(cfg: dict, store: Any, system: str, user: str, *,
         ai = dict(cfg.get("ai") or {})
         ai["temperature"] = temperature
         cfg = {**cfg, "ai": ai}
-    return deliberate(user, system=system, cfg=cfg, store=store,
+    return deliberate(user, system=system, cfg=cfg, store=store, strategy=strategy,
                       history=history, context=context)
+
+
+def score(cfg: dict, store: Any, task: str, candidate: str, *,
+          rubric: Optional[dict] = None, prompt: Optional[str] = None) -> Optional[dict]:
+    """Score one ``candidate`` answer 0-100 with quorum's judge, or ``None`` if off.
+
+    A host tool with its own deterministic ranker can call this as an *optional,
+    off-by-default* second opinion. It returns ``{"score", "sub_scores",
+    "rationale"}`` from the same rubric-driven judge quorum uses internally, or
+    ``None`` when the ``quorum:`` layer is disabled/unconfigured (so the host keeps
+    its deterministic result untouched). ``candidate`` is judged strictly as DATA,
+    never as instructions (OWASP LLM01). Pass a ``rubric`` (``{criterion: weight}``)
+    to override the default judge rubric, and ``prompt`` to describe how the
+    candidate was produced (defaults to ``task``).
+    """
+    if not enabled(cfg):
+        return None
+    from . import judge, provider as provider_mod
+    qcfg = build_config(cfg)
+    if rubric:
+        j = dict(qcfg.get("judge") or {})
+        j["rubric"] = rubric
+        qcfg["judge"] = j
+    prov = provider_mod.for_config(qcfg)
+    verdict, _turn = judge.evaluate(qcfg, prov, 0, task, prompt or task,
+                                    [("candidate", candidate)], store=store)
+    return {"score": verdict.score, "sub_scores": dict(verdict.sub_scores),
+            "rationale": verdict.rationale}

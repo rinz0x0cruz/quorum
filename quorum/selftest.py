@@ -297,6 +297,13 @@ def run() -> int:
             out = api.chat(host, store, "You are precise.", "Say hello.")
             c.ok("api.chat returns text", isinstance(out, str) and len(out) > 0)
             c.ok("api.chat disabled -> None", api.chat(host_off, store, "s", "u") is None)
+            c.ok("api.chat per-call strategy",
+                 isinstance(api.chat(host, store, "s", "u", strategy="ensemble"), str))
+            _sv = api.score(host, store, "Rate this answer.", "a candidate to judge",
+                            rubric={"relevance": 0.7, "authority": 0.3})
+            c.ok("api.score returns verdict",
+                 isinstance(_sv, dict) and _sv["score"] == 55.0 and bool(_sv["sub_scores"]))
+            c.ok("api.score disabled -> None", api.score(host_off, store, "t", "c") is None)
 
             # --- OpenAI-compatible API (serveapi) -------------------------
             from . import serveapi
