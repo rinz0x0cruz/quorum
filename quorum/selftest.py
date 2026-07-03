@@ -263,6 +263,23 @@ def run() -> int:
                 _deep_merge(cfg, {"promptsmith": {"bootstrap": True, "rounds": 1}}),
                 prov, "new q", store=store)))
 
+            # --- adapters (external -> quorum, shared by api + serveapi) --
+            from . import adapters
+            _ahost = {"ai": {"provider": "mock", "model": "mock/m1", "max_tokens": 200, "api_key_env": ""},
+                      "quorum": {"enabled": True, "strategy": "refine", "max_rounds": 2}}
+            _aqc = adapters.host_config(_ahost)
+            c.ok("adapters.host_config maps host",
+                 _aqc["run"]["strategy"] == "refine" and _aqc["council"]["judge"] == "mock:mock/m1")
+            _asys, _ahist, _alast = adapters.split_messages([
+                {"role": "system", "content": "s"}, {"role": "user", "content": "a"},
+                {"role": "assistant", "content": "b"}, {"role": "user", "content": "c"}])
+            c.ok("adapters.split_messages triple",
+                 _asys == "s" and _alast == "c" and _ahist == [{"role": "user", "content": "a"},
+                                                               {"role": "assistant", "content": "b"}])
+            c.ok("adapters.select_strategy named", adapters.select_strategy("debate", cfg) == "debate")
+            c.ok("adapters.select_strategy default",
+                 adapters.select_strategy("nope", cfg) == (cfg.get("run", {}) or {}).get("strategy", "refine"))
+
             # --- embed API (backend for other tools) ----------------------
             from . import api
             host = {"ai": {"provider": "mock", "model": "mock/m1", "max_tokens": 200, "api_key_env": ""},

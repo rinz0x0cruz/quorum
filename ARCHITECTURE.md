@@ -42,6 +42,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `__main__.py` | CLI (argparse); lazy-imports feature modules | `cmd_run/chat/bench/serve/...` |
 | `api.py` | **Embed API** — drop-in for a host tool's `ai.chat` | `enabled`, `build_config`, `deliberate`, `chat` |
 | `serveapi.py` | **OpenAI-compatible HTTP server** (`serve --api`) for non-Python hosts | `complete_chat`, `make_server`, `run`, `_split` |
+| `adapters.py` | **External -> quorum mappers** shared by `api` + `serveapi` (entry-layer helper) | `host_config`, `split_messages`, `select_strategy` |
 
 ### Orchestration — run one deliberation end to end
 | Module | Responsibility | Key symbols |
@@ -251,7 +252,7 @@ shippable; none changes behavior.
 | 1 | ~~`run.*` re-parsed in every strategy~~ | **Shipped**: typed `RunOptions` resolved once in the orchestrator, hung on `Context` | `strategies/__init__.py`, `orchestrator.py`, `strategies/*` | ✅ done |
 | 2 | ~~orchestrator hard-codes its stages~~ | **Shipped**: pre/post `hooks` around the strategy | `hooks.py`, `orchestrator.py` | ✅ done |
 | 3 | ~~lexical text-scoring split across callers~~ | **Shipped**: a `scoring/` package -- shared dependency-free primitives (`tokens`, `overlap_coeff`, `jaccard`) + a `Scorer` protocol & registry (built-in `lexical`, `quorum.scorers` entry points); `contextwindow.select` and `judge.consensus_reached` share them. The LLM rubric-judge / reference-grader can join the registry later | `scoring/`, `contextwindow.py`, `judge.py` | ✅ done |
-| 4 | `api.build_config` and serveapi request-mapping both translate *external → quorum* | One **`adapters` module** with a host-config mapper + a request mapper, reused by both surfaces | `api.py`, `serveapi.py` | Medium |
+| 4 | ~~`api.build_config` and serveapi request-mapping both translate *external → quorum*~~ | **Shipped**: a `quorum/adapters.py` entry-layer helper -- `host_config` (host `ai:`/`quorum:` -> quorum config), `split_messages` (OpenAI messages -> system/history/last_user), `select_strategy` (model field -> strategy). `api.build_config` is a thin wrapper and `serveapi._split`/`complete_chat` delegate, so both surfaces share one implementation | `adapters.py`, `api.py`, `serveapi.py` | ✅ done |
 | 5 | `prompts.py` is a flat grab-bag; strategy-specific builders (e.g. `challenge`) bloat it | Co-locate builders with their strategy (or a `prompts/` package by role); keep the shared DATA/LLM01 framing in one helper | `prompts.py`, `strategies/*` | Medium |
 | 6 | `provider.py` bundles routing + transport (retry/fallback/json-mode) + accounting | Split a **transport** layer from a `Provider` protocol so alternate backends (embeddings, streaming, optional litellm) register like strategies | `provider.py` | Low* |
 | 7 | No config validation — a mistyped key silently no-ops | A light **known-keys validator** that warns on unknown paths | `config.py` | Low |
@@ -260,10 +261,11 @@ shippable; none changes behavior.
 \* Low unless a non-OpenAI or multi-backend provider lands on the roadmap — then #6 jumps to High.
 
 ### Suggested near-term order
-**#1 (RunOptions)**, **#2 (hook pipeline)**, and **#3 (scoring package)** are
-shipped -- together they cover the commonest shapes of a new feature (a new *knob*
--> #1, a new *stage* -> #2, a new *text-scoring measure* -> #3). Next up:
-**#4 (adapters)** the next time a new host integrates.
+**#1 (RunOptions)**, **#2 (hook pipeline)**, **#3 (scoring package)**, and
+**#4 (adapters)** are shipped -- together they cover the commonest shapes of a new
+feature (a new *knob* -> #1, a new *stage* -> #2, a new *text-scoring measure* ->
+#3, a new *host integration* -> #4). Next up: **#5 (prompts package)** when
+strategy-specific prompt builders start to bloat `prompts.py`.
 
 ---
 
