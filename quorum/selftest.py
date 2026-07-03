@@ -211,5 +211,15 @@ def run() -> int:
             c.ok("api.chat returns text", isinstance(out, str) and len(out) > 0)
             c.ok("api.chat disabled -> None", api.chat(host_off, store, "s", "u") is None)
 
+            # --- OpenAI-compatible API (serveapi) -------------------------
+            from . import serveapi
+            code, obj = serveapi.complete_chat(cfg, {"model": "refine", "messages": [
+                {"role": "system", "content": "be precise"},
+                {"role": "user", "content": "hello"}]})
+            c.ok("serveapi 200 + content", code == 200 and bool(obj["choices"][0]["message"]["content"]))
+            c.ok("serveapi model tag", obj["model"] == "quorum/refine")
+            bad, _ = serveapi.complete_chat(cfg, {"messages": [{"role": "system", "content": "s"}]})
+            c.ok("serveapi no-user 400", bad == 400)
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1

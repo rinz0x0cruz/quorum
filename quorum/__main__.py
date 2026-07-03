@@ -118,6 +118,9 @@ def cmd_dashboard(args, cfg):
 
 
 def cmd_serve(args, cfg):
+    if getattr(args, "api", False):
+        from . import serveapi
+        return serveapi.run(cfg, port=args.port, token=args.token)
     from . import serve
     return serve.run(cfg, port=args.port, open_browser=args.open)
 
@@ -189,6 +192,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("serve", help="Serve the dashboard locally")
     sp.add_argument("--port", type=int, default=8802)
     sp.add_argument("--open", action="store_true")
+    sp.add_argument("--api", action="store_true",
+                    help="Serve an OpenAI-compatible /v1/chat/completions endpoint (deliberates per request)")
+    sp.add_argument("--token", default="", help="Optional bearer token required by --api")
     sp.set_defaults(func=cmd_serve)
 
     sp = sub.add_parser("export", help="Export a session as JSON, CSV, or Markdown")
