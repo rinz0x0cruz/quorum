@@ -46,8 +46,9 @@ Grouped by layer (all under `quorum/quorum/`).
 ### Orchestration — run one deliberation end to end
 | Module | Responsibility | Key symbols |
 |---|---|---|
-| `orchestrator.py` | The pipeline: promptsmith → context preamble → strategy → persist | `run_session(...)` |
-| `strategies/__init__.py` | Strategy **registry** + entry-point discovery + shared `Context` | `Context`, `get`, `available` |
+| `orchestrator.py` | The pipeline: promptsmith → context preamble → pre-hooks → strategy → post-hooks → persist | `run_session(...)` |
+| `strategies/__init__.py` | Strategy **registry** + entry-point discovery + shared `Context` + resolved `RunOptions` | `Context`, `RunOptions`, `get`, `available` |
+| `hooks.py` | Pre/post extension hooks around the strategy (retrieval, filters, post-processing) | `register_pre`, `register_post`, `run_pre/post` |
 | `strategies/{debate,council,moa,refine,ensemble}.py` | The deliberation algorithms | each exposes `run(ctx)` |
 
 ### Reasoning services — the moving parts a strategy composes
@@ -232,6 +233,8 @@ a fresh config behaves like the pre-feature engine. Current sections: `council`,
 ### Already modular (keep leaning on these)
 - **Strategy registry + entry points** — the model to copy for other pluggable
   concerns.
+- **`RunOptions` + the `hooks` pipeline** — new *knobs* land in one dataclass;
+  new *stages* attach around the strategy without editing `run_session`.
 - **Provider = the single network seam** — makes the whole engine offline-testable.
 - **Stateless core + caller-owned state** — context/history are inputs, not
   engine memory.
@@ -244,8 +247,8 @@ shippable; none changes behavior.
 
 | # | Smell (today) | Move | Files | Priority |
 |---|---|---|---|---|
-| 1 | `run.*` is accreting knobs (`fallbacks`, `top_k`, `devils_advocate`, `moa_layers`, stopping, ...); every strategy re-parses `run.get(...)` | Resolve a typed **`RunOptions`** once in the orchestrator, hang it on `Context`; strategies read fields, not the dict | `strategies/__init__.py`, `orchestrator.py`, all `strategies/*` | **High** |
-| 2 | The orchestrator hard-codes its stages (promptsmith → context → strategy → persist); new stages (retrieval, safety/PII filter, post-processing) mean editing `run_session` | A small **pre/post hook pipeline** so stages register instead of being inlined | `orchestrator.py` | **High** |
+| 1 | ~~`run.*` re-parsed in every strategy~~ | **Shipped**: typed `RunOptions` resolved once in the orchestrator, hung on `Context` | `strategies/__init__.py`, `orchestrator.py`, `strategies/*` | ✅ done |
+| 2 | ~~orchestrator hard-codes its stages~~ | **Shipped**: pre/post `hooks` around the strategy | `hooks.py`, `orchestrator.py` | ✅ done |
 | 3 | "Score/rank text" logic is split four ways | A **`scoring/` package** with a common scorer protocol + registry (lexical, rubric-LLM, reference-numeric, embedding-later); `judge`/`grade` become evaluators, `rank`/`contextwindow.select` share the scorers | `judge.py`, `grade.py`, `rank.py`, `contextwindow.py` | Medium |
 | 4 | `api.build_config` and serveapi request-mapping both translate *external → quorum* | One **`adapters` module** with a host-config mapper + a request mapper, reused by both surfaces | `api.py`, `serveapi.py` | Medium |
 | 5 | `prompts.py` is a flat grab-bag; strategy-specific builders (e.g. `challenge`) bloat it | Co-locate builders with their strategy (or a `prompts/` package by role); keep the shared DATA/LLM01 framing in one helper | `prompts.py`, `strategies/*` | Medium |
@@ -256,10 +259,10 @@ shippable; none changes behavior.
 \* Low unless a non-OpenAI or multi-backend provider lands on the roadmap — then #6 jumps to High.
 
 ### Suggested near-term order
-Do **#1 (RunOptions)** and **#2 (hook pipeline)** first: together they are the
-biggest leverage for "add more features" because most new features are either a
-new knob (→ #1) or a new stage (→ #2). Then **#3 (scoring package)** the next time
-retrieval/eval grows, and **#4 (adapters)** the next time a new host integrates.
+**#1 (RunOptions)** and **#2 (hook pipeline)** are shipped — together they cover
+the two commonest shapes of a new feature (a new *knob* → #1, a new *stage* →
+#2). Next up: **#3 (scoring package)** the next time retrieval/eval grows, then
+**#4 (adapters)** the next time a new host integrates.
 
 ---
 

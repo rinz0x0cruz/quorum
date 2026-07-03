@@ -13,8 +13,7 @@ from . import Context
 
 def run(ctx: Context):
     cfg, prov = ctx.cfg, ctx.prov
-    run = cfg.get("run", {}) or {}
-    max_rounds = int(run.get("max_rounds", 4))
+    max_rounds = ctx.opts.max_rounds
     if not ctx.members:
         ctx.session.status = "error"
         ctx.session.stop_reason = "no members configured"

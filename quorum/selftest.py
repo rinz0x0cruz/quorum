@@ -292,5 +292,18 @@ def run() -> int:
             c.ok("serveapi accepts history+context",
                  _cs[0] == 200 and bool(_cs[1]["choices"][0]["message"]["content"]))
 
+            # --- run-options + extension hooks ----------------------------
+            from .strategies import RunOptions as _RO
+            _ro = _RO.from_cfg({"run": {"max_rounds": 7, "top_k": 2, "devils_advocate": True}})
+            c.ok("run-options resolved", _ro.max_rounds == 7 and _ro.top_k == 2 and _ro.devils_advocate)
+            from . import hooks as _hooks
+            _hooks.clear()
+            _hf = {"pre": 0, "post": 0}
+            _hooks.register_pre(lambda ctx: _hf.__setitem__("pre", _hf["pre"] + 1))
+            _hooks.register_post(lambda ctx: _hf.__setitem__("post", _hf["post"] + 1))
+            orchestrator.run_session(cfg, "hooked", store=store, strategy="refine", promptsmith_on=False)
+            _hooks.clear()
+            c.ok("pre/post hooks fire", _hf == {"pre": 1, "post": 1})
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1

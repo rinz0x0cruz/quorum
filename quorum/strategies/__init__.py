@@ -8,7 +8,7 @@ group (see pyproject) and are picked up automatically when installed.
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..model import ModelSpec, Session
@@ -23,6 +23,51 @@ _BUILTIN = {
 
 
 @dataclass
+class RunOptions:
+    """The ``run.*`` knobs resolved once, so strategies read fields, not a dict.
+
+    Parsed in the orchestrator from the effective config (after any CLI/arg
+    overrides) and hung on :class:`Context`. Add a new run-level knob here and in
+    ``from_cfg``, and every strategy can use it without re-parsing config.
+    """
+
+    strategy: str = "refine"
+    max_rounds: int = 4
+    target_score: float = 85.0
+    plateau_delta: float = 2.0
+    plateau_patience: int = 2
+    consensus: bool = False
+    moa_layers: int = 2
+    samples: int = 3
+    temperature: float = 0.5
+    max_tokens: int = 1200
+    anonymize: bool = True
+    parallel: bool = True
+    top_k: int = 0
+    devils_advocate: bool = False
+
+    @classmethod
+    def from_cfg(cls, cfg: dict) -> "RunOptions":
+        r = cfg.get("run", {}) or {}
+        return cls(
+            strategy=r.get("strategy", "refine"),
+            max_rounds=int(r.get("max_rounds", 4)),
+            target_score=float(r.get("target_score", 85)),
+            plateau_delta=float(r.get("plateau_delta", 2)),
+            plateau_patience=int(r.get("plateau_patience", 2)),
+            consensus=bool(r.get("consensus", False)),
+            moa_layers=max(1, int(r.get("moa_layers", 2))),
+            samples=max(1, int(r.get("samples", 3))),
+            temperature=float(r.get("temperature", 0.5)),
+            max_tokens=int(r.get("max_tokens", 1200)),
+            anonymize=bool(r.get("anonymize", True)),
+            parallel=bool(r.get("parallel", True)),
+            top_k=int(r.get("top_k", 0) or 0),
+            devils_advocate=bool(r.get("devils_advocate", False)),
+        )
+
+
+@dataclass
 class Context:
     cfg: dict
     prov: Any                      # provider.Provider
@@ -32,6 +77,7 @@ class Context:
     members: list[ModelSpec]
     session: Session
     emit: Callable[[str], None]
+    opts: RunOptions = field(default_factory=RunOptions)  # resolved run.* knobs
 
 
 def available() -> list[str]:

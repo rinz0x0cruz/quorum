@@ -15,9 +15,9 @@ from . import Context
 
 def run(ctx: Context):
     cfg, prov, members = ctx.cfg, ctx.prov, ctx.members
-    run = cfg.get("run", {}) or {}
-    max_rounds = int(run.get("max_rounds", 4))
-    anon = bool(run.get("anonymize", True))
+    o = ctx.opts
+    max_rounds = o.max_rounds
+    anon = o.anonymize
     chair = role_spec(cfg, "chairman")
 
     verdicts = []
@@ -62,7 +62,7 @@ def run(ctx: Context):
             reviews.append(comp.text)
 
         # optional (LLM-Blender): rank by the peer reviews and fuse only the top-K
-        top_k = int(run.get("top_k", 0) or 0)
+        top_k = o.top_k
         fuse_answers = answers
         if 0 < top_k < len(answers):
             idxs = rank.top_k_indices(len(answers), reviews, top_k)

@@ -59,11 +59,15 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
         if pre:
             delib_prompt = pre + "\n\n" + prompt
 
-    # phase 2: strategy deliberation
+    # phase 2: strategy deliberation (with optional pre/post extension hooks)
+    from . import hooks
     ctx = strategies.Context(cfg=cfg, prov=prov, store=store, task=task, prompt=delib_prompt,
-                             members=members, session=session, emit=log)
+                             members=members, session=session, emit=log,
+                             opts=strategies.RunOptions.from_cfg(cfg))
+    hooks.run_pre(ctx)
     strat = strategies.get(strat_name)
     strat(ctx)
+    hooks.run_post(ctx)
 
     # Persist only when the store is a quorum store (embed callers may pass their
     # own tool's store, which only implements the AI cache).

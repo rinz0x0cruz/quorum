@@ -86,3 +86,17 @@ def test_promptsmith_bootstrap_runs_with_seeded_sessions(tmp_path):
         prov = provider.for_config(cfg)
         instr = promptsmith.refine(cfg, prov, "new task", store=store)
     assert isinstance(instr, str) and instr
+
+
+def test_run_options_from_cfg_reads_knobs():
+    from quorum.strategies import RunOptions
+    opts = RunOptions.from_cfg({"run": {"max_rounds": 7, "top_k": 3, "devils_advocate": True,
+                                        "moa_layers": 5, "anonymize": False}})
+    assert opts.max_rounds == 7 and opts.top_k == 3 and opts.devils_advocate is True
+    assert opts.moa_layers == 5 and opts.anonymize is False
+
+
+def test_run_options_defaults():
+    from quorum.strategies import RunOptions
+    opts = RunOptions.from_cfg({})
+    assert opts.strategy == "refine" and opts.max_rounds == 4 and opts.top_k == 0
