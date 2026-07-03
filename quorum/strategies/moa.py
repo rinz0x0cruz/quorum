@@ -15,9 +15,9 @@ from . import Context
 
 def run(ctx: Context):
     cfg, prov, members = ctx.cfg, ctx.prov, ctx.members
-    run = cfg.get("run", {}) or {}
-    layers = max(1, int(run.get("moa_layers", 2)))
-    anon = bool(run.get("anonymize", True))
+    o = ctx.opts
+    layers = o.moa_layers
+    anon = o.anonymize
 
     prev: list[tuple[str, str]] = []   # (member, text) from the previous layer
     for layer in range(1, layers + 1):
@@ -51,7 +51,7 @@ def run(ctx: Context):
 
     # optional (LLM-Blender): rank the last layer and aggregate only the top-K.
     # MoA has no peer reviews, so add one lightweight review call when enabled.
-    top_k = int(run.get("top_k", 0) or 0)
+    top_k = o.top_k
     fuse = prev
     if 0 < top_k < len(prev):
         reviewer = role_spec(cfg, "aggregator")

@@ -14,14 +14,14 @@ from . import Context
 
 def run(ctx: Context):
     cfg, prov = ctx.cfg, ctx.prov
-    run = cfg.get("run", {}) or {}
-    n = max(1, int(run.get("samples", 3)))
+    o = ctx.opts
+    n = o.samples
     if not ctx.members:
         ctx.session.status = "error"
         ctx.session.stop_reason = "no members configured"
         return ctx.session
     m = ctx.members[0]
-    temp = float(run.get("temperature", 0.5)) + 0.3
+    temp = o.temperature + 0.3
 
     rnd = Round(index=1)
     jobs = [(m, prompts.propose(ctx.prompt, ctx.task)) for _ in range(n)]

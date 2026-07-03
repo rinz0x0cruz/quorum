@@ -31,16 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch the house-style checker
-        uses: actions/checkout@v4
-        with:
-          repository: rinz0x0cruz/ai-agent-skills
-          path: .agent-skills
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: House-style compliance (house_check.py)
-        run: python .agent-skills/skills/ai-tool-builder/assets/house_check.py --strict .
+      - name: House-style compliance (vendored house_check.py)
+        run: python .github/house_check.py --strict .
 
   docker:
     needs: test

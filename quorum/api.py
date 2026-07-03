@@ -41,7 +41,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from .config import DEFAULT_CONFIG, _deep_merge
+from . import adapters
 
 
 def enabled(cfg: dict) -> bool:
@@ -60,38 +60,12 @@ def enabled(cfg: dict) -> bool:
 
 
 def build_config(cfg: dict) -> dict:
-    """Compose a quorum config from the host tool's ``ai:`` + optional ``quorum:``."""
-    ai = cfg.get("ai", {}) or {}
-    q = cfg.get("quorum", {}) or {}
-    provider = ai.get("provider") or "openai"
-    model = ai.get("model") or ""
-    role = f"{provider}:{model}"
+    """Compose a quorum config from the host tool's ``ai:`` + optional ``quorum:``.
 
-    providers = {provider: {"base_url": ai.get("base_url", ""),
-                            "api_key_env": ai.get("api_key_env", "")}}
-    providers.update(q.get("providers") or {})
-    members = q.get("members") or [{"name": "m1", "provider": provider, "model": model}]
-
-    overlay = {
-        "providers": providers,
-        "council": {
-            "members": members,
-            "judge": q.get("judge") or role,
-            "chairman": q.get("chairman") or role,
-            "aggregator": q.get("aggregator") or role,
-        },
-        "run": {
-            "strategy": q.get("strategy", "refine"),
-            "max_rounds": int(q.get("max_rounds", 2)),
-            "target_score": float(q.get("target_score", 85)),
-            "temperature": ai.get("temperature", 0.3),
-            "max_tokens": ai.get("max_tokens", 700),
-            "parallel": bool(q.get("parallel", False)),
-        },
-        "promptsmith": {"enabled": False},
-        "cost": {"budget_usd": float(q.get("budget_usd", 0.0))},
-    }
-    return _deep_merge(DEFAULT_CONFIG, overlay)
+    Thin wrapper over :func:`adapters.host_config` -- the host-config mapping is
+    shared with ``serveapi`` and lives in ``adapters``.
+    """
+    return adapters.host_config(cfg)
 
 
 def deliberate(task: str, *, system: Optional[str] = None, cfg: Optional[dict] = None,

@@ -13,12 +13,12 @@ from . import Context
 
 def run(ctx: Context):
     cfg, prov, members = ctx.cfg, ctx.prov, ctx.members
-    run = cfg.get("run", {}) or {}
-    max_rounds = int(run.get("max_rounds", 4))
-    anon = bool(run.get("anonymize", True))
+    o = ctx.opts
+    max_rounds = o.max_rounds
+    anon = o.anonymize
     # devil's advocate (MAD): one member argues the counter-case from round 2 on,
     # keeping the debate divergent and avoiding premature consensus.
-    devil = members[-1] if (run.get("devils_advocate") and len(members) >= 2) else None
+    devil = members[-1] if (o.devils_advocate and len(members) >= 2) else None
 
     verdicts = []
     latest: dict[str, str] = {}   # member name -> latest answer
@@ -75,7 +75,7 @@ def run(ctx: Context):
             break
 
         stop, reason = judge.should_stop(cfg, verdicts, r)
-        if not stop and run.get("consensus") and judge.consensus_reached(list(latest.values())):
+        if not stop and o.consensus and judge.consensus_reached(list(latest.values())):
             stop, reason = True, "members reached consensus"
         if stop:
             verdict.stop = True
