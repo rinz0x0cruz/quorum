@@ -29,11 +29,24 @@ def test_missing_user_message_is_400(tmp_path):
     assert code == 400 and "error" in obj
 
 
-def test_extract_takes_last_user_and_all_system():
-    system, user = serveapi._extract([
+def test_split_takes_last_user_history_and_all_system():
+    system, history, user = serveapi._split([
         {"role": "system", "content": "a"},
         {"role": "user", "content": "first"},
         {"role": "assistant", "content": "..."},
         {"role": "user", "content": "second"},
     ])
     assert system == "a" and user == "second"
+    assert history == [{"role": "user", "content": "first"},
+                       {"role": "assistant", "content": "..."}]
+
+
+def test_complete_chat_accepts_history_and_context(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    req = {"model": "refine", "messages": [
+        {"role": "user", "content": "earlier question"},
+        {"role": "assistant", "content": "earlier answer"},
+        {"role": "user", "content": "follow-up"}],
+        "context": [{"title": "Doc", "text": "grounding material"}]}
+    code, obj = serveapi.complete_chat(cfg, req)
+    assert code == 200 and obj["choices"][0]["message"]["content"]

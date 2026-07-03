@@ -25,18 +25,33 @@ from .strategies import available as strategies_available
 MAX_BODY = 1_000_000  # 1 MB request cap
 
 
-def _extract(messages: list[dict[str, Any]]) -> tuple[str, str]:
+def _split(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str, str]], str]:
+    """Return ``(system, history, last_user)``.
+
+    ``history`` is every user/assistant turn *before* the final user message, so a
+    multi-turn client (e.g. a chatbot) gets conversation memory; ``last_user`` is
+    the message to act on. All system messages are concatenated.
+    """
     system = "\n".join(m.get("content", "") for m in messages if m.get("role") == "system")
-    users = [m.get("content", "") for m in messages if m.get("role") == "user"]
-    return system, (users[-1] if users else "")
+    convo = [{"role": m.get("role", ""), "content": m.get("content", "")}
+             for m in messages if m.get("role") in ("user", "assistant")]
+    last_user = -1
+    for i, m in enumerate(convo):
+        if m["role"] == "user":
+            last_user = i
+    if last_user < 0:
+        return system, convo, ""
+    return system, convo[:last_user], convo[last_user]["content"]
 
 
 def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
     """Pure request->response (no HTTP), so it is unit-testable offline."""
     messages = req.get("messages") or []
-    system, user = _extract(messages)
+    system, history, user = _split(messages)
     if not user:
         return 400, {"error": {"message": "no user message"}}
+    # Optional, non-standard grounding docs (OpenAI clients simply omit this).
+    context = req.get("context") or None
 
     strategies = set(strategies_available())
     default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
@@ -46,6 +61,7 @@ def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
     rcfg = copy.deepcopy(cfg)  # per-request: run_session mutates run.strategy
     try:
         sess = orchestrator.run_session(rcfg, user, solve_prompt=system,
+                                        history=history or None, context=context,
                                         promptsmith_on=False, strategy=strategy, verbose=False)
     except Exception as e:  # noqa: BLE001 - surface as a gateway error, never crash the server
         return 502, {"error": {"message": f"deliberation failed: {e}"}}

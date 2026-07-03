@@ -76,6 +76,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "pricing": {},
     },
 
+    # Optional grounding for callers that need memory (chatbot conversation
+    # history, or feeding prior documents back in). Inert unless a caller passes
+    # history/docs; these knobs just bound how much gets injected.
+    "context": {
+        "budget_tokens": 4000,       # max tokens of injected history + docs
+        "history_turns": 8,          # max prior conversation messages kept (most recent)
+        "top_k": 5,                  # max grounding docs the lexical selector keeps
+    },
+
     "output": {
         "db_path": "data/quorum.db",
         "dashboard_path": "data/dashboard.html",

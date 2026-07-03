@@ -45,6 +45,14 @@ def test_chat_returns_none_when_disabled():
     assert api.chat(off, None, "sys", "user") is None
 
 
+def test_chat_accepts_history_and_context_via_mock():
+    out = api.chat(host_cfg(), None, "You are precise.", "follow-up question",
+                   history=[{"role": "user", "content": "earlier q"},
+                            {"role": "assistant", "content": "earlier a"}],
+                   context=[{"title": "Doc", "text": "grounding material"}])
+    assert isinstance(out, str) and out
+
+
 def test_deliberate_with_multi_model_council():
     cfg = host_cfg()
     cfg["quorum"]["members"] = [

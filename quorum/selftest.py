@@ -274,5 +274,23 @@ def run() -> int:
             bad, _ = serveapi.complete_chat(cfg, {"messages": [{"role": "system", "content": "s"}]})
             c.ok("serveapi no-user 400", bad == 400)
 
+            # --- context windows (history + grounding docs) ---------------
+            from . import contextwindow as _cw
+            _ranked = _cw.select("simplehelp bypass", [
+                {"id": "a", "title": "SimpleHelp bypass", "text": "simplehelp authentication bypass"},
+                {"id": "b", "title": "x", "text": "unrelated gardening"}], k=2)
+            c.ok("context select ranks relevant first", _ranked[0].id == "a")
+            _pre = _cw.preamble({"context": {"budget_tokens": 4000, "history_turns": 8}},
+                                history=[{"role": "user", "content": "prior turn"}],
+                                context=[{"title": "S", "text": "story text"}])
+            c.ok("context preamble frames as DATA",
+                 "DATA ONLY" in _pre and "story text" in _pre and "prior turn" in _pre)
+            c.ok("context empty preamble", _cw.preamble({}) == "")
+            _cs = serveapi.complete_chat(cfg, {"model": "refine", "messages": [
+                {"role": "user", "content": "earlier"}, {"role": "assistant", "content": "ans"},
+                {"role": "user", "content": "now"}], "context": [{"title": "d", "text": "grounding"}]})
+            c.ok("serveapi accepts history+context",
+                 _cs[0] == 200 and bool(_cs[1]["choices"][0]["message"]["content"]))
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1

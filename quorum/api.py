@@ -95,17 +95,21 @@ def build_config(cfg: dict) -> dict:
 
 
 def deliberate(task: str, *, system: Optional[str] = None, cfg: Optional[dict] = None,
-               store: Any = None, strategy: Optional[str] = None) -> Optional[str]:
+               store: Any = None, strategy: Optional[str] = None,
+               history: Optional[list] = None, context: Optional[list] = None) -> Optional[str]:
     """Run a deliberation and return the final answer text (or ``None`` on failure).
 
     ``system`` is used verbatim as the solve-instruction (promptsmith is skipped),
-    so the host's own prompt fully drives the deliberation.
+    so the host's own prompt fully drives the deliberation. Optional ``history``
+    (prior ``{role, content}`` messages) and ``context`` (reference docs) are
+    injected as grounding DATA.
     """
     from . import orchestrator
     qcfg = build_config(cfg or {})
     if strategy:
         qcfg["run"]["strategy"] = strategy
     sess = orchestrator.run_session(qcfg, task, store=store, solve_prompt=system or "",
+                                    history=history, context=context,
                                     promptsmith_on=False, verbose=False)
     if sess.status != "ok" or not (sess.final or "").strip():
         return None
@@ -113,11 +117,13 @@ def deliberate(task: str, *, system: Optional[str] = None, cfg: Optional[dict] =
 
 
 def chat(cfg: dict, store: Any, system: str, user: str, *,
-         temperature: Optional[float] = None) -> Optional[str]:
+         temperature: Optional[float] = None,
+         history: Optional[list] = None, context: Optional[list] = None) -> Optional[str]:
     """Drop-in for a sibling tool's ``ai.chat`` -- deliberate, or ``None`` if off.
 
     Signature-compatible so a host's ``ai.chat`` can delegate here first and fall
-    back to its own single-model path when this returns ``None``.
+    back to its own single-model path when this returns ``None``. Hosts that need
+    memory may also pass ``history`` and/or ``context`` (both optional).
     """
     if not enabled(cfg):
         return None
@@ -125,4 +131,5 @@ def chat(cfg: dict, store: Any, system: str, user: str, *,
         ai = dict(cfg.get("ai") or {})
         ai["temperature"] = temperature
         cfg = {**cfg, "ai": ai}
-    return deliberate(user, system=system, cfg=cfg, store=store)
+    return deliberate(user, system=system, cfg=cfg, store=store,
+                      history=history, context=context)

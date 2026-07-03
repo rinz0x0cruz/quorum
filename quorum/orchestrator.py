@@ -16,6 +16,7 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
                 max_rounds: Optional[int] = None, target: Optional[float] = None,
                 promptsmith_on: bool = True, promptsmith: Optional[bool] = None,
                 solve_prompt: Optional[str] = None,
+                history: Optional[list] = None, context: Optional[list] = None,
                 verbose: bool = False, prov: Any = None,
                 emit: Optional[Callable[[str], None]] = None) -> Session:
     # CLI passes promptsmith=<bool>; keep that name working too.
@@ -48,8 +49,18 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
             prompt = ps.refine(cfg, prov, task, store=store, session=session, emit=log)
     session.prompt = prompt
 
+    # Optional grounding: prepend caller-supplied conversation history / reference
+    # docs as DATA (the whole council sees it; session.prompt stays clean so the
+    # stored transcript is not bloated by the caller's context).
+    delib_prompt = prompt
+    if history or context:
+        from . import contextwindow
+        pre = contextwindow.preamble(cfg, history=history, context=context)
+        if pre:
+            delib_prompt = pre + "\n\n" + prompt
+
     # phase 2: strategy deliberation
-    ctx = strategies.Context(cfg=cfg, prov=prov, store=store, task=task, prompt=prompt,
+    ctx = strategies.Context(cfg=cfg, prov=prov, store=store, task=task, prompt=delib_prompt,
                              members=members, session=session, emit=log)
     strat = strategies.get(strat_name)
     strat(ctx)
