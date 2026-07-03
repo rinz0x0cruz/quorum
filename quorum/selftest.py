@@ -56,6 +56,19 @@ def run() -> int:
     c.ok("vendor maps gpt", model_vendor("openai/gpt-4o") == "openai")
     c.ok("modelspec ref", ModelSpec("j", "mock", "x/y").ref() == "mock:x/y")
 
+    # --- scoring (leaf lexical primitives + registry) ---------------------
+    from . import scoring
+    c.ok("scoring tokenizes", scoring.tokens("Hello, WORLD 42!") == {"hello", "world", "42"})
+    # overlap_coeff (rank/contextwindow) is asymmetric; jaccard (consensus) is
+    # symmetric -- same inputs, different results proves they are NOT the same formula.
+    c.ok("overlap_coeff |q&d|/|q|", scoring.overlap_coeff({"a", "b"}, {"a", "b", "c", "d"}) == 1.0)
+    c.ok("jaccard |a&b|/|a|b|", scoring.jaccard({"a", "b"}, {"a", "b", "c", "d"}) == 0.5)
+    c.ok("overlap empty-query -> 0", scoring.overlap_coeff(set(), {"a"}) == 0.0)
+    c.ok("registry resolves lexical", "lexical" in scoring.available()
+         and isinstance(scoring.get("lexical"), scoring.Scorer))
+    c.ok("LexicalScorer scores via overlap",
+         scoring.get("lexical").score("a b", "a b c d") == 1.0)
+
     # --- config -----------------------------------------------------------
     from .config import DEFAULT_CONFIG, _deep_merge, load_config, member_specs, parse_ref, role_spec
     merged = _deep_merge(DEFAULT_CONFIG, {"run": {"target_score": 5}})
@@ -158,6 +171,10 @@ def run() -> int:
             from . import prompts as _prompts
             _ch = _prompts.challenge("p", "t", "prev", [("a", "x")], "c", True)
             c.ok("challenge builder", len(_ch) == 2 and "devil" in _ch[0]["content"].lower())
+            _pp = _prompts.propose("", "t")
+            c.ok("prompts package re-exports",
+                 len(_pp) == 2 and _pp[0]["content"] == _prompts.PROPOSER_SYSTEM
+                 and "QUORUM-AGGREGATOR" in _prompts.AGGREGATOR_SYSTEM)
             _seen: dict = {}
             _orig_complete = prov.complete
             def _spy(spec, messages, **kw):
@@ -249,6 +266,23 @@ def run() -> int:
             c.ok("promptsmith bootstrap ok", bool(promptsmith.refine(
                 _deep_merge(cfg, {"promptsmith": {"bootstrap": True, "rounds": 1}}),
                 prov, "new q", store=store)))
+
+            # --- adapters (external -> quorum, shared by api + serveapi) --
+            from . import adapters
+            _ahost = {"ai": {"provider": "mock", "model": "mock/m1", "max_tokens": 200, "api_key_env": ""},
+                      "quorum": {"enabled": True, "strategy": "refine", "max_rounds": 2}}
+            _aqc = adapters.host_config(_ahost)
+            c.ok("adapters.host_config maps host",
+                 _aqc["run"]["strategy"] == "refine" and _aqc["council"]["judge"] == "mock:mock/m1")
+            _asys, _ahist, _alast = adapters.split_messages([
+                {"role": "system", "content": "s"}, {"role": "user", "content": "a"},
+                {"role": "assistant", "content": "b"}, {"role": "user", "content": "c"}])
+            c.ok("adapters.split_messages triple",
+                 _asys == "s" and _alast == "c" and _ahist == [{"role": "user", "content": "a"},
+                                                               {"role": "assistant", "content": "b"}])
+            c.ok("adapters.select_strategy named", adapters.select_strategy("debate", cfg) == "debate")
+            c.ok("adapters.select_strategy default",
+                 adapters.select_strategy("nope", cfg) == (cfg.get("run", {}) or {}).get("strategy", "refine"))
 
             # --- embed API (backend for other tools) ----------------------
             from . import api

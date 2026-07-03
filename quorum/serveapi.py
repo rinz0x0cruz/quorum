@@ -19,44 +19,23 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from . import orchestrator
+from . import adapters, orchestrator
+from .adapters import split_messages as _split
 from .strategies import available as strategies_available
 
 MAX_BODY = 1_000_000  # 1 MB request cap
 
 
-def _split(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str, str]], str]:
-    """Return ``(system, history, last_user)``.
-
-    ``history`` is every user/assistant turn *before* the final user message, so a
-    multi-turn client (e.g. a chatbot) gets conversation memory; ``last_user`` is
-    the message to act on. All system messages are concatenated.
-    """
-    system = "\n".join(m.get("content", "") for m in messages if m.get("role") == "system")
-    convo = [{"role": m.get("role", ""), "content": m.get("content", "")}
-             for m in messages if m.get("role") in ("user", "assistant")]
-    last_user = -1
-    for i, m in enumerate(convo):
-        if m["role"] == "user":
-            last_user = i
-    if last_user < 0:
-        return system, convo, ""
-    return system, convo[:last_user], convo[last_user]["content"]
-
-
 def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
     """Pure request->response (no HTTP), so it is unit-testable offline."""
     messages = req.get("messages") or []
-    system, history, user = _split(messages)
+    system, history, user = adapters.split_messages(messages)
     if not user:
         return 400, {"error": {"message": "no user message"}}
     # Optional, non-standard grounding docs (OpenAI clients simply omit this).
     context = req.get("context") or None
 
-    strategies = set(strategies_available())
-    default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
-    model = req.get("model", "") or ""
-    strategy = model if model in strategies else default_strategy
+    strategy = adapters.select_strategy(req.get("model", ""), cfg)
 
     rcfg = copy.deepcopy(cfg)  # per-request: run_session mutates run.strategy
     try:

@@ -20,11 +20,10 @@ and the token budget caps how much can be injected.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from . import cost
+from . import cost, scoring
 
 
 @dataclass
@@ -37,18 +36,6 @@ class ContextDoc:
     source: str = ""
     ts: str = ""
     score: float = 0.0
-
-
-_WORD = re.compile(r"[a-z0-9]+")
-
-
-def _tokens(s: str) -> set[str]:
-    return set(_WORD.findall((s or "").lower()))
-
-
-def _overlap(query: set[str], doc: set[str]) -> float:
-    """Overlap coefficient: fraction of query terms the doc covers (0..1)."""
-    return (len(query & doc) / len(query)) if query else 0.0
 
 
 def _normalize(d: Any) -> ContextDoc:
@@ -71,11 +58,11 @@ def select(query: str, docs: list[Any], k: int = 5) -> list[ContextDoc]:
     (tools that do -- like exploitrank's actor/product/CVE linker -- should score
     and pass docs directly). ``k <= 0`` returns all, scored.
     """
-    q = _tokens(query)
+    q = scoring.tokens(query)
     scored = []
     for d in docs or []:
         doc = _normalize(d)
-        doc.score = _overlap(q, _tokens(f"{doc.title} {doc.text}"))
+        doc.score = scoring.overlap_coeff(q, scoring.tokens(f"{doc.title} {doc.text}"))
         scored.append(doc)
     scored.sort(key=lambda d: d.score, reverse=True)
     return scored[:k] if k and k > 0 else scored
