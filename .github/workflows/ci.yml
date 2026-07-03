@@ -32,13 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t quorum:ci .
-      - name: Smoke-test the image (mock config)
-        run: |
-          printf 'council:\n  members:\n    - { name: a, provider: mock, model: m/a }\n  judge: mock:openai/j\nproviders:\n  mock: { base_url: "", api_key_env: "" }\nrun: { strategy: refine, parallel: false }\n' > config.yaml
-          docker run -d --name q -p 8802:8802 -v "$PWD/config.yaml:/app/config.yaml:ro" quorum:ci
-          sleep 3
-          curl -fsS -X POST http://127.0.0.1:8802/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"refine","messages":[{"role":"user","content":"hi"}]}'
-          docker rm -f q
+      - name: Smoke-test the image (offline selftest inside the container)
+        run: docker run --rm quorum:ci selftest
       - name: Export image as a downloadable artifact (no registry)
         run: docker save quorum:ci | gzip > quorum-image.tar.gz
       - uses: actions/upload-artifact@v4
