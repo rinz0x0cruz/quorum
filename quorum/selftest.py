@@ -49,7 +49,7 @@ def run() -> int:
     c = _Check()
 
     # --- model ------------------------------------------------------------
-    from .model import ModelSpec, Session, Turn, content_hash, model_vendor, session_id
+    from .model import ModelSpec, Session, content_hash, model_vendor, session_id
     c.ok("content_hash stable", content_hash("a", "b") == content_hash("a", "b"))
     c.ok("session_id prefixed", session_id("t", "debate", 1.0).startswith("s-"))
     c.ok("vendor maps claude", model_vendor("anthropic/claude-3.5") == "anthropic")

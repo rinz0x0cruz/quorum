@@ -19,10 +19,23 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
+      - name: Lint (ruff)
+        if: matrix.os == 'ubuntu-latest'
+        run: ruff check .
       - name: Offline selftest (mock provider, no key)
         run: python -m quorum selftest
       - name: Unit + HTTP tests
         run: pytest -q
+
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: House-style compliance (vendored house_check.py)
+        run: python .github/house_check.py --strict .
 
   docker:
     needs: test

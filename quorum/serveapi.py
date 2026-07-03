@@ -20,7 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from . import adapters, orchestrator
-from .adapters import split_messages as _split
+# re-exported for the API/test-suite (serveapi._split); see tests/test_serveapi.py
+from .adapters import split_messages as _split  # noqa: F401
 from .strategies import available as strategies_available
 
 MAX_BODY = 1_000_000  # 1 MB request cap
@@ -60,7 +61,6 @@ def complete_chat(cfg: dict, req: dict) -> tuple[int, dict[str, Any]]:
 
 def make_server(cfg: dict, host: str = "127.0.0.1", port: int = 8802, token: str = "",
                 request_timeout: float = 120.0) -> ThreadingHTTPServer:
-    default_strategy = (cfg.get("run", {}) or {}).get("strategy", "refine")
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, obj: dict) -> None:
