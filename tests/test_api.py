@@ -80,3 +80,29 @@ def test_accepts_foreign_store_without_session_tables():
     store = _CacheOnlyStore()
     out = api.chat(host_cfg(), store, "sys", "user")
     assert isinstance(out, str) and out  # no crash on missing save_session/tables
+
+
+def test_chat_accepts_per_call_strategy_via_mock():
+    # A per-call strategy overrides the host's configured quorum.strategy for one call.
+    out = api.chat(host_cfg(), None, "You are precise.", "Say hello.", strategy="ensemble")
+    assert isinstance(out, str) and out
+
+
+def test_score_returns_verdict_via_mock():
+    v = api.score(host_cfg(), None, "Rate this answer.", "a candidate answer to judge")
+    assert isinstance(v, dict)
+    assert v["score"] == 55.0             # mock judge at round 0 -> 55 + 15*0
+    assert isinstance(v["sub_scores"], dict) and v["sub_scores"]
+    assert isinstance(v["rationale"], str)
+
+
+def test_score_returns_none_when_disabled():
+    off = host_cfg()
+    off["quorum"]["enabled"] = False
+    assert api.score(off, None, "task", "candidate") is None
+
+
+def test_score_accepts_custom_rubric_without_crash():
+    v = api.score(host_cfg(), None, "Rate fit.", "candidate text",
+                  rubric={"relevance": 0.7, "authority": 0.3}, prompt="how relevant is this?")
+    assert isinstance(v, dict) and v["score"] == 55.0
