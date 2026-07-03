@@ -20,6 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from . import adapters, orchestrator
+# re-exported for the API/test-suite (serveapi._split); see tests/test_serveapi.py
+from .adapters import split_messages as _split  # noqa: F401
 from .strategies import available as strategies_available
 
 MAX_BODY = 1_000_000  # 1 MB request cap
