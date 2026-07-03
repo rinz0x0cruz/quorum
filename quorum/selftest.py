@@ -61,7 +61,7 @@ def run() -> int:
     merged = _deep_merge(DEFAULT_CONFIG, {"run": {"target_score": 5}})
     c.ok("deep_merge overrides leaf", merged["run"]["target_score"] == 5)
     c.ok("deep_merge keeps siblings", merged["run"]["max_rounds"] == 4)
-    c.ok("load_config defaults", load_config(None)["run"]["strategy"] == "debate")
+    c.ok("load_config defaults", load_config(None)["run"]["strategy"] == "refine")
     c.ok("parse_ref keeps model colons", parse_ref("openrouter:meta/x:free") == ("openrouter", "meta/x:free"))
     with tempfile.TemporaryDirectory() as tmp:
         cfg = _mock_cfg(os.path.join(tmp, "t.db"))

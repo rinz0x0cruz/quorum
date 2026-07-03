@@ -41,7 +41,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
 
     "run": {
-        "strategy": "debate",       # debate | council | moa | refine | ensemble
+        "strategy": "refine",       # debate | council | moa | refine | ensemble
         "max_rounds": 4,            # hard cap on deliberation rounds
         "target_score": 85,         # 0-100 "good enough" threshold
         "plateau_delta": 2,         # stop if the best score gains < this ...

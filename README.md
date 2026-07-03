@@ -72,7 +72,7 @@ quorum --config config.mock.yaml run "anything" --strategy debate
 | `refine` | Single model generates → critiques itself → revises. A cheap single-agent baseline. | low |
 | `ensemble` | Sample one model N times; the judge picks the best. Self-consistency baseline. | low |
 
-Pick a default in `config.yaml` (`run.strategy`) or override with `--strategy`.
+**Default: `refine`** — in a GSM8K reference eval it matched `debate`'s accuracy at roughly a third of the cost/latency, echoing the "Should we be going MAD?" finding that debate isn't always worth it. Switch to `debate`/`council`/`moa` for hard or contested prompts via `run.strategy` in `config.yaml` or `--strategy`.
 
 ## Which strategy is best? Benchmark it.
 

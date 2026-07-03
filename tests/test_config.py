@@ -10,7 +10,7 @@ def test_deep_merge_overrides_leaf_keeps_siblings():
 
 def test_load_config_defaults():
     cfg = load_config(None)
-    assert cfg["run"]["strategy"] == "debate"
+    assert cfg["run"]["strategy"] == "refine"
     assert "mock" in cfg["providers"]
 
 
