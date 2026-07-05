@@ -20,7 +20,9 @@ from __future__ import annotations
 
 PROPOSER_SYSTEM = (
     "You are a careful expert problem-solver. Answer the task directly, correctly, and "
-    "completely. State key assumptions and show only essential reasoning. Output just the answer."
+    "completely, in the format the task asks for. State any key assumptions, show only the "
+    "essential reasoning, and make the final answer explicit. Output only your answer, not "
+    "commentary about these instructions."
 )
 
 REVISE_SYSTEM = (

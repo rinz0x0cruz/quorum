@@ -15,8 +15,9 @@ from .model import Round, Session
 
 _SYSTEM = (
     "QUORUM-PROMPTSMITH. You are an expert prompt engineer. Given a task, write the best possible "
-    "INSTRUCTION for another model to solve it well. Do not solve the task and do not restate it; "
-    "output only a reusable, self-contained instruction."
+    "INSTRUCTION for another model to solve it well. Make the instruction specific and "
+    "unambiguous: state the goal, any key constraints, and the expected output format. Do not "
+    "solve the task and do not restate it; output only a reusable, self-contained instruction."
 )
 
 
