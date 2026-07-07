@@ -204,7 +204,12 @@ class Provider:
         if response_format:
             body["response_format"] = response_format
         payload = json.dumps(body).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        # Send an explicit User-Agent: some provider CDNs (e.g. Groq behind
+        # Cloudflare) 403 the default urllib User-Agent as a suspected bot.
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "quorum (+https://github.com/rinz0x0cruz/quorum)",
+        }
         k = api_key(self.cfg, spec.provider)
         if k:
             headers["Authorization"] = f"Bearer {k}"
