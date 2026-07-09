@@ -178,12 +178,14 @@ class Provider:
     """Routes a :class:`ModelSpec` + messages to the right endpoint or the mock."""
 
     def __init__(self, cfg: dict, *, mock: Optional[MockResponder] = None, timeout: int = 60,
-                 max_retries: int = 3, backoff: float = 2.5, telemetry: Any = None):
+                 max_retries: int = 3, backoff: float = 2.5, telemetry: Any = None,
+                 retry_429: int = 1):
         self.cfg = cfg
         self.mock = mock or MockResponder()
         self.timeout = timeout
         self.max_retries = max_retries      # retries on 429/5xx (free tiers throttle)
         self.backoff = backoff              # initial backoff seconds (doubles each retry)
+        self.retry_429 = retry_429          # fewer retries on 429: a per-minute cap won't clear in seconds -> rotate to a fallback instead
         self.telemetry = telemetry          # Store-like sink for per-attempt throttle logs
         self._limiters: dict[str, RateLimiter] = {}
         self._limiters_lock = threading.Lock()
@@ -329,7 +331,11 @@ class Provider:
                 ra_s = float(ra) if (ra and str(ra).replace(".", "", 1).isdigit()) else 0.0
                 self._record(spec, last_err, http_code=e.code, attempt=attempt, a0=a0,
                              headers=e.headers, retry_after=ra_s)
-                if e.code in (429, 500, 502, 503, 504) and attempt < self.max_retries:
+                # A 429 is a per-minute cap that a few seconds of backoff won't clear,
+                # so retry it at most `retry_429` times, then fail so complete() can
+                # rotate to a fallback model (which has its own separate limit).
+                budget = self.retry_429 if e.code == 429 else self.max_retries
+                if e.code in (429, 500, 502, 503, 504) and attempt < budget:
                     time.sleep(min(ra_s or delay, 15))
                     delay *= 2
                     continue

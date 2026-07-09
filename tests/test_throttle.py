@@ -120,3 +120,30 @@ def test_rate_limiter_paces_calls():
     second = rl.acquire()                    # must wait ~interval
     assert first == 0.0
     assert second > 0.0
+
+
+def test_429_rotates_to_fallback_fast(tmp_path, monkeypatch):
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    cfg["providers"]["live"] = {"base_url": "http://example.test/v1", "api_key_env": ""}
+    store = Store(cfg["output"]["db_path"])
+    prov = provider.Provider(cfg, telemetry=store, backoff=0)   # backoff=0 -> no real sleeps
+    calls = {"primary": 0, "alt": 0}
+    hdrs = email.message.Message()
+    hdrs["Retry-After"] = "0"
+
+    def _urlopen(req, timeout=0):
+        model = json.loads(req.data)["model"]
+        if model == "primary/m":
+            calls["primary"] += 1
+            raise provider.urllib.error.HTTPError("http://x", 429, "Too Many", hdrs, None)
+        calls["alt"] += 1
+        return _Resp()
+
+    monkeypatch.setattr(provider.urllib.request, "urlopen", _urlopen)
+    spec = ModelSpec(name="x", provider="live", model="primary/m",
+                     fallbacks=[ModelSpec(name="fb", provider="live", model="alt/m")])
+    comp = prov.complete(spec, [{"role": "user", "content": "hi"}], cache=False)
+    store.close()
+    assert comp.ok and comp.model == "alt/m"
+    assert calls["primary"] == 2             # 1 try + 1 retry (retry_429=1), then rotate
+    assert calls["alt"] == 1
