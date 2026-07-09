@@ -19,6 +19,7 @@ _BUILTIN = {
     "moa": "quorum.strategies.moa",
     "refine": "quorum.strategies.refine",
     "ensemble": "quorum.strategies.ensemble",
+    "selfconsistency": "quorum.strategies.selfconsistency",
     "cascade": "quorum.strategies.cascade",
 }
 

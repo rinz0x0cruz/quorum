@@ -18,6 +18,7 @@ EXPECTED_SYSTEMS = [
     "CHAIRMAN_SYSTEM",
     "AGGREGATOR_SYSTEM",
     "MOA_LAYER_SYSTEM",
+    "USC_SYSTEM",
 ]
 
 EXPECTED_BUILDERS = [
@@ -30,6 +31,7 @@ EXPECTED_BUILDERS = [
     "revise_from_draft",
     "moa_layer",
     "aggregate",
+    "usc",
 ]
 
 

@@ -184,7 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("run", help="Deliberate to a good-enough solution")
     sp.add_argument("task", help="The question or task to solve")
     sp.add_argument("--strategy", default=None,
-                    choices=["debate", "council", "moa", "refine", "ensemble", "cascade"],
+                    choices=["debate", "council", "moa", "refine", "ensemble", "selfconsistency", "cascade"],
                     help="Override the configured strategy")
     sp.add_argument("--rounds", type=int, default=None, help="Override max rounds")
     sp.add_argument("--target", type=float, default=None, help="Override target score (0-100)")
@@ -231,7 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--user", default=None, help="User message (default: read from stdin)")
     sp.add_argument("--system", default="", help="System / instruction prompt")
     sp.add_argument("--strategy", default=None,
-                    choices=["debate", "council", "moa", "refine", "ensemble", "cascade"],
+                    choices=["debate", "council", "moa", "refine", "ensemble", "selfconsistency", "cascade"],
                     help="Override the configured strategy")
     sp.add_argument("--json", action="store_true",
                     help="Emit JSON {content, strategy, status, tokens, cost_usd}")

@@ -20,10 +20,12 @@ from .base import (
     PROPOSER_SYSTEM,
     REFINE_SYSTEM,
     REVISE_SYSTEM,
+    USC_SYSTEM,
     propose,
     revise,
     revise_from_draft,
     self_refine,
+    usc,
 )
 from .council import CHAIRMAN_SYSTEM, REVIEW_SYSTEM, review, synthesize
 from .debate import CHALLENGER_SYSTEM, challenge
@@ -39,6 +41,7 @@ __all__ = [
     "CHAIRMAN_SYSTEM",
     "AGGREGATOR_SYSTEM",
     "MOA_LAYER_SYSTEM",
+    "USC_SYSTEM",
     # message builders
     "propose",
     "revise",
@@ -49,4 +52,5 @@ __all__ = [
     "revise_from_draft",
     "moa_layer",
     "aggregate",
+    "usc",
 ]

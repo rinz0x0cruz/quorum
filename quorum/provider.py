@@ -63,6 +63,8 @@ class MockResponder:
             return self._judge(user)
         if "QUORUM-GRADER" in system:
             return self._grade(user)
+        if "QUORUM-USC" in system:
+            return self._usc(user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -88,6 +90,10 @@ class MockResponder:
     def _grade(self, user: str) -> str:
         return json.dumps({"score": 90.0, "correct": True,
                            "rationale": "Mock grade: candidate matches the reference."})
+
+    def _usc(self, user: str) -> str:
+        labels = re.findall(r"CANDIDATE (\w+)", user or "") or ["A"]
+        return json.dumps({"choice": labels[0]})
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

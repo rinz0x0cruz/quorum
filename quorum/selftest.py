@@ -237,6 +237,14 @@ def run() -> int:
             _jturns = [t for r in _jc.rounds for t in r.turns if t.kind == "judge"]
             c.ok("refine judges 3 of 4 rounds", len(_jturns) == 3)
 
+            # --- self-consistency (USC selection + majority vote) ---------
+            c.ok("usc prompt has sentinel", "QUORUM-USC" in _prompts.usc("t", [("a", "x")])[0]["content"])
+            _sc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"samples": 3}}),
+                "sc task", store=store, strategy="selfconsistency", promptsmith_on=False)
+            c.ok("selfconsistency reaches consensus",
+                 bool(_sc.final) and "self-consistency" in _sc.stop_reason and _sc.final_score > 0)
+
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
                 _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),

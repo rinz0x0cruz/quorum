@@ -28,7 +28,7 @@ def run(ctx: Context):
 
     rnd = Round(index=1)
     jobs = [(m, prompts.propose(ctx.prompt, ctx.task)) for _ in range(n)]
-    comps = prov.complete_many(jobs, temperature=temp, store=ctx.store)
+    comps = prov.complete_many(jobs, temperature=temp, store=ctx.store, cache=False)
     candidates, cand_models = [], []
     for i, comp in enumerate(comps):
         if not comp.ok:
@@ -71,7 +71,7 @@ def _adaptive(ctx: Context, m, temp: float):
     n_ok = 0
     for i in range(1, max_n + 1):
         comp = ctx.prov.complete(m, prompts.propose(ctx.prompt, ctx.task),
-                                 temperature=temp, store=ctx.store)
+                                 temperature=temp, store=ctx.store, cache=False)
         if not comp.ok:
             continue
         turn = provider.to_turn(comp, 1, f"sample{i}", "propose")
