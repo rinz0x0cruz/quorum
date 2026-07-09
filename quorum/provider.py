@@ -16,6 +16,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -62,6 +63,8 @@ class MockResponder:
             return self._judge(user)
         if "QUORUM-GRADER" in system:
             return self._grade(user)
+        if "QUORUM-USC" in system:
+            return self._usc(user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -87,6 +90,10 @@ class MockResponder:
     def _grade(self, user: str) -> str:
         return json.dumps({"score": 90.0, "correct": True,
                            "rationale": "Mock grade: candidate matches the reference."})
+
+    def _usc(self, user: str) -> str:
+        labels = re.findall(r"CANDIDATE (\w+)", user or "") or ["A"]
+        return json.dumps({"choice": labels[0]})
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "
@@ -122,6 +129,77 @@ def _after(text: str, marker: str) -> str:
     return text[i + len(marker):] if i >= 0 else ""
 
 
+def _rl_from_headers(headers: Any) -> tuple[int, int, str]:
+    """Parse ``X-RateLimit-*`` headers (present on OpenRouter/OpenAI responses)."""
+    if not headers:
+        return 0, 0, ""
+
+    def _int(name: str) -> int:
+        v = headers.get(name)
+        try:
+            return int(float(v)) if v not in (None, "") else 0
+        except (ValueError, TypeError):
+            return 0
+
+    return (_int("X-RateLimit-Limit"), _int("X-RateLimit-Remaining"),
+            str(headers.get("X-RateLimit-Reset") or ""))
+
+
+# --------------------------------------------------------------------------
+# rate limiting
+# --------------------------------------------------------------------------
+class RateLimiter:
+    """Pace :meth:`acquire` calls to at most ``rpm`` per minute (thread-safe).
+
+    Shared across a provider's parallel fan-out so bursts are spread out instead
+    of tripping a per-minute cap (free tiers throttle ~20 req/min). It advances a
+    single ``next allowed time`` cursor under a lock, then sleeps outside it, so N
+    concurrent threads are spaced by ``60/rpm`` seconds. ``rpm <= 0`` disables it.
+    """
+
+    def __init__(self, rpm: float):
+        self.rpm = float(rpm or 0)
+        self.interval = 60.0 / self.rpm if self.rpm > 0 else 0.0
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def acquire(self) -> float:
+        """Block until a slot is free; return the seconds waited (0 if disabled)."""
+        if self.rpm <= 0:
+            return 0.0
+        with self._lock:
+            now = time.monotonic()
+            start = now if now >= self._next else self._next
+            self._next = start + self.interval
+            wait = start - now
+        if wait > 0:
+            time.sleep(wait)
+        return wait
+
+
+# Process-wide per-provider limiters, so every Provider in this process (bench
+# tasks, server requests, a long-running embed host) shares one pacing budget per
+# provider -- a fresh Provider per call would otherwise reset pacing and let
+# bursts through, defeating the point on free tiers.
+_LIMITERS: dict[str, RateLimiter] = {}
+_LIMITERS_LOCK = threading.Lock()
+
+
+def _shared_limiter(name: str, rpm: float) -> RateLimiter:
+    with _LIMITERS_LOCK:
+        lim = _LIMITERS.get(name)
+        if lim is None or lim.rpm != rpm:
+            lim = RateLimiter(rpm)
+            _LIMITERS[name] = lim
+        return lim
+
+
+def reset_rate_limiters() -> None:
+    """Clear the process-wide limiter registry (test hygiene / reconfiguration)."""
+    with _LIMITERS_LOCK:
+        _LIMITERS.clear()
+
+
 # --------------------------------------------------------------------------
 # provider
 # --------------------------------------------------------------------------
@@ -129,12 +207,15 @@ class Provider:
     """Routes a :class:`ModelSpec` + messages to the right endpoint or the mock."""
 
     def __init__(self, cfg: dict, *, mock: Optional[MockResponder] = None, timeout: int = 60,
-                 max_retries: int = 3, backoff: float = 2.5):
+                 max_retries: int = 3, backoff: float = 2.5, telemetry: Any = None,
+                 retry_429: int = 1):
         self.cfg = cfg
         self.mock = mock or MockResponder()
         self.timeout = timeout
         self.max_retries = max_retries      # retries on 429/5xx (free tiers throttle)
         self.backoff = backoff              # initial backoff seconds (doubles each retry)
+        self.retry_429 = retry_429          # fewer retries on 429: a per-minute cap won't clear in seconds -> rotate to a fallback instead
+        self.telemetry = telemetry          # Store-like sink for per-attempt throttle logs
 
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
@@ -178,6 +259,17 @@ class Provider:
             return self._finish(spec, messages, self.mock.respond(spec, messages), t0)
         return self._http(spec, messages, temp, maxt, t0, response_format)
 
+    def _limiter(self, provider: str) -> RateLimiter:
+        """The process-wide, shared rate limiter for a provider."""
+        return _shared_limiter(provider, self._rpm_for(provider))
+
+    def _rpm_for(self, provider: str) -> float:
+        """Per-minute budget for a provider: ``providers.<p>.rpm`` else ``run.rate_limit_rpm``."""
+        pconf = provider_conf(self.cfg, provider)
+        if pconf.get("rpm") is not None:
+            return float(pconf.get("rpm") or 0)
+        return float((self.cfg.get("run", {}) or {}).get("rate_limit_rpm", 0) or 0)
+
     def _finish(self, spec: ModelSpec, messages: list[dict[str, str]], text: str,
                 t0: float, tokens_out: Optional[int] = None) -> Completion:
         tin = cost.count_messages(messages, spec.model)
@@ -188,6 +280,23 @@ class Provider:
             cost_usd=cost.price(self.cfg, spec.model, tin, tout),
             latency_ms=int((time.time() - t0) * 1000),
         )
+
+    def _record(self, spec: ModelSpec, status: str, *, http_code: int = 0, attempt: int = 0,
+                a0: float = 0.0, headers: Any = None, retry_after: float = 0.0,
+                tokens_in: int = 0, tokens_out: int = 0) -> None:
+        """Best-effort telemetry: log one HTTP attempt for throttle analysis."""
+        tel = self.telemetry
+        if tel is None or not hasattr(tel, "add_api_call"):
+            return
+        rl_lim, rl_rem, rl_reset = _rl_from_headers(headers)
+        latency = int((time.time() - a0) * 1000) if a0 else 0
+        try:
+            tel.add_api_call(spec.provider, spec.model, status, http_code=http_code,
+                             attempt=attempt, latency_ms=latency, retry_after=retry_after,
+                             rl_limit=rl_lim, rl_remaining=rl_rem, rl_reset=rl_reset,
+                             tokens_in=tokens_in, tokens_out=tokens_out)
+        except Exception:  # noqa: BLE001 - telemetry must never break a run
+            pass
 
     def _http(self, spec: ModelSpec, messages: list[dict[str, str]],
               temperature: float, max_tokens: int, t0: float,
@@ -215,11 +324,15 @@ class Provider:
             headers["Authorization"] = f"Bearer {k}"
 
         delay, last_err = self.backoff, ""
+        limiter = self._limiter(spec.provider)
         for attempt in range(self.max_retries + 1):
+            limiter.acquire()
+            a0 = time.time()
             req = urllib.request.Request(base + "/chat/completions", data=payload,
                                          headers=headers, method="POST")
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - configured endpoint
+                    resp_headers = getattr(resp, "headers", None)
                     data = json.loads(resp.read().decode("utf-8"))
                 text = data["choices"][0]["message"]["content"].strip()
                 usage = data.get("usage", {}) or {}
@@ -228,18 +341,30 @@ class Provider:
                 if usage.get("prompt_tokens"):
                     comp.tokens_in = int(usage["prompt_tokens"])
                     comp.cost_usd = cost.price(self.cfg, spec.model, comp.tokens_in, comp.tokens_out)
+                self._record(spec, "ok", http_code=200, attempt=attempt, a0=a0,
+                             headers=resp_headers, tokens_in=comp.tokens_in,
+                             tokens_out=comp.tokens_out)
                 return comp
             except urllib.error.HTTPError as e:
                 last_err = f"HTTP {e.code}"
-                if e.code in (429, 500, 502, 503, 504) and attempt < self.max_retries:
-                    ra = e.headers.get("Retry-After") if e.headers else None
-                    time.sleep(min(float(ra) if (ra and str(ra).isdigit()) else delay, 15))
+                ra = e.headers.get("Retry-After") if e.headers else None
+                ra_s = float(ra) if (ra and str(ra).replace(".", "", 1).isdigit()) else 0.0
+                self._record(spec, last_err, http_code=e.code, attempt=attempt, a0=a0,
+                             headers=e.headers, retry_after=ra_s)
+                # A 429 is a per-minute cap that a few seconds of backoff won't clear,
+                # so retry it at most `retry_429` times, then fail so complete() can
+                # rotate to a fallback model (which has its own separate limit).
+                budget = self.retry_429 if e.code == 429 else self.max_retries
+                if e.code in (429, 500, 502, 503, 504) and attempt < budget:
+                    time.sleep(min(ra_s or delay, 15))
                     delay *= 2
                     continue
                 return Completion("", spec.model, spec.provider, ok=False,
                                   error=last_err, latency_ms=int((time.time() - t0) * 1000))
             except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
                 last_err = str(e)
+                status = "timeout" if isinstance(e, TimeoutError) else "error"
+                self._record(spec, status, http_code=0, attempt=attempt, a0=a0)
                 if attempt < self.max_retries:
                     time.sleep(delay)
                     delay *= 2
@@ -272,8 +397,8 @@ class Provider:
         return [r for r in results if r is not None]
 
 
-def for_config(cfg: dict, *, mock: Optional[MockResponder] = None) -> Provider:
-    return Provider(cfg, mock=mock)
+def for_config(cfg: dict, *, mock: Optional[MockResponder] = None, store: Any = None) -> Provider:
+    return Provider(cfg, mock=mock, telemetry=store)
 
 
 def to_turn(comp: Completion, round_index: int, member: str, kind: str) -> Turn:

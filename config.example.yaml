@@ -38,16 +38,26 @@ run:
   plateau_patience: 2      # ... for this many consecutive rounds
   consensus: false         # also stop when members converge on one answer
   moa_layers: 2            # layers for the mixture-of-agents strategy
-  samples: 3               # samples for the ensemble baseline
+  samples: 3               # ensemble: number of samples (the max/budget when adaptive)
+  samples_min: 2           # ensemble: min samples before an adaptive early-stop
+  adaptive_samples: false  # ensemble: sample one at a time, stop on a confident majority (fewer calls)
   temperature: 0.5
   max_tokens: 1200
+  judge_every: 1           # judge every N rounds (>1 trades feedback granularity for fewer judge calls)
   anonymize: true          # hide model identities during peer review
   parallel: true           # fan proposer calls out concurrently
+  # Pace HTTP calls to at most this many per minute, per provider (0 = off). Free
+  # OpenRouter :free models cap at 20/min globally -- set ~18 to avoid 429 bursts.
+  # A provider profile can override this with its own `rpm:` field.
+  rate_limit_rpm: 0
   # Default alternates tried, in order, when a member/role call fails (e.g. free-tier 429).
   # Applies to any member/role without its own fallbacks, e.g. [openrouter:google/gemma-4-31b-it:free]
   fallbacks: []
   top_k: 0                 # if >0, rank candidates and fuse only the top-K (council/moa)
   devils_advocate: false   # debate: make one member argue the counter-case from round 2 on
+  # strategy: cascade runs these stages cheapest-first, stopping at the first that
+  # reaches target_score -- so easy tasks cost ~2-3 calls and only hard ones escalate.
+  cascade: []              # e.g. [refine, debate, council]  (empty -> that default)
 
 # Phase 1: design + refine the solve-prompt before the council answers.
 promptsmith:
@@ -64,6 +74,7 @@ judge:
     grounding: 0.15
   cross_family_guard: true   # prefer a judge from a different vendor than the candidate
   json_mode: false           # request OpenAI JSON mode for judge/grader (only if your endpoint supports it)
+  shuffle_candidates: true   # randomise candidate order to curb LLM-judge position bias (MT-Bench)
 
 cost:
   budget_usd: 0.50           # abort a run if projected spend exceeds this (0 = no cap)

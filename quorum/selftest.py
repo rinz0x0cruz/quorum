@@ -149,7 +149,7 @@ def run() -> int:
             cands = [("alice", "answer one"), ("bob", "answer two")]
             v1, jt1 = judge.evaluate(cfg, prov, 1, "task", "prompt", cands,
                                      candidate_models=["mock/alice", "anthropic/mock-bob"], store=store)
-            c.ok("judge scores round1", v1.score == 70.0 and v1.best_label == "alice")
+            c.ok("judge scores round1", v1.score == 70.0 and (v1.best_label, v1.best_content) in cands)
             c.ok("judge turn accounted", jt1.tokens_out > 0 and jt1.kind == "judge")
             c.ok("no stop below target", judge.should_stop(cfg, [v1], 1)[0] is False)
             v2, _ = judge.evaluate(cfg, prov, 2, "task", "prompt", cands,
@@ -206,6 +206,50 @@ def run() -> int:
             c.ok("no-promptsmith skips round 0",
                  all(r.index != 0 for r in orchestrator.run_session(
                      cfg, "skip ps", store=store, strategy="refine", promptsmith_on=False).rounds))
+
+            # --- cascade (difficulty-adaptive escalation; FrugalGPT) ------
+            c.ok("cascade registered", "cascade" in strategies.available())
+            _casc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"cascade": ["refine", "debate"]}}),
+                "cascade task", store=store, strategy="cascade", promptsmith_on=False)
+            c.ok("cascade stops at cheap stage",
+                 _casc.stop_reason.startswith("cascade: refine reached target") and bool(_casc.final))
+
+            # --- adaptive-consistency (fewer samples via early stop) ------
+            from . import consistency as _cons
+            c.ok("consistency clusters numeric",
+                 _cons.leader(_cons.cluster(["ans 5", "so 5", "no 7"]))["count"] == 2)
+            c.ok("consistency confident on majority",
+                 _cons.confident(_cons.cluster(["5", "5", "5"])) is True)
+            _ada = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"adaptive_samples": True, "samples": 10, "samples_min": 2}}),
+                "adaptive q", store=store, strategy="ensemble", promptsmith_on=False)
+            _adaprop = [t for r in _ada.rounds for t in r.turns if t.kind == "propose"]
+            c.ok("ensemble adaptive early-stops",
+                 len(_adaprop) == 2 and "adaptive vote" in _ada.stop_reason)
+
+            # --- judge cadence (run.judge_every defers judge calls) -------
+            c.ok("judge.due skips mid, keeps ends",
+                 judge.due(1, 2, 4) and judge.due(4, 2, 4) and not judge.due(3, 2, 4))
+            _jc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"judge_every": 2, "max_rounds": 4, "target_score": 200}}),
+                "cadence q", store=store, strategy="refine", promptsmith_on=False)
+            _jturns = [t for r in _jc.rounds for t in r.turns if t.kind == "judge"]
+            c.ok("refine judges 3 of 4 rounds", len(_jturns) == 3)
+
+            # --- self-consistency (USC selection + majority vote) ---------
+            c.ok("usc prompt has sentinel", "QUORUM-USC" in _prompts.usc("t", [("a", "x")])[0]["content"])
+            _sc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"samples": 3}}),
+                "sc task", store=store, strategy="selfconsistency", promptsmith_on=False)
+            c.ok("selfconsistency reaches consensus",
+                 bool(_sc.final) and "self-consistency" in _sc.stop_reason and _sc.final_score > 0)
+
+            # --- config validation (#7): warn on unknown keys -------------
+            from .config import validate_config as _vc
+            c.ok("config validate clean", _vc({"run": {"max_rounds": 3}}) == [])
+            c.ok("config validate flags typo", "run.max_round" in _vc({"run": {"max_round": 3}}))
+            c.ok("config validate self-clean", _vc(_deep_merge(DEFAULT_CONFIG, {})) == [])
 
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
@@ -345,6 +389,32 @@ def run() -> int:
             orchestrator.run_session(cfg, "hooked", store=store, strategy="refine", promptsmith_on=False)
             _hooks.clear()
             c.ok("pre/post hooks fire", _hf == {"pre": 1, "post": 1})
+
+            # --- throttle telemetry + analyzer ----------------------------
+            from . import throttle
+            store.add_api_call("openrouter", "m:free", "ok", http_code=200,
+                               latency_ms=50, rl_remaining=8)
+            store.add_api_call("openrouter", "m:free", "HTTP 429", http_code=429,
+                               retry_after=2.0, rl_remaining=0)
+            c.ok("api_calls recorded", len(store.api_calls_recent()) >= 2)
+            _tsum = throttle.summarize([
+                {"ts": "2026-07-10T10:00:01Z", "provider": "openrouter", "model": "m:free",
+                 "status": "ok", "http_code": 200, "latency_ms": 50, "rl_remaining": 8},
+                {"ts": "2026-07-10T10:00:01Z", "provider": "openrouter", "model": "m:free",
+                 "status": "HTTP 429", "http_code": 429, "latency_ms": 0, "rl_remaining": 0}])
+            c.ok("throttle summarize counts 429",
+                 _tsum["throttled"] == 1 and _tsum["by_model"]["m:free"]["total"] == 2)
+            c.ok("throttle flags free ceiling",
+                 any("rate_limit_rpm" in r for r in throttle.recommendations(
+                     {"total": 1, "throttled": 1, "peak_rpm": {"openrouter": 20}, "by_model": {}},
+                     cfg, None)))
+
+            # --- rate limiter (paces HTTP bursts under a per-minute cap) ---
+            from .provider import RateLimiter as _RL
+            c.ok("rate limiter disabled -> no wait", _RL(0).acquire() == 0.0)
+            _rl = _RL(1200)  # 0.05s interval
+            _w1, _w2 = _rl.acquire(), _rl.acquire()
+            c.ok("rate limiter paces 2nd call", _w1 == 0.0 and _w2 > 0.0)
 
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1

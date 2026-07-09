@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
 from typing import Any, Optional
 
@@ -62,8 +63,25 @@ CREATE TABLE IF NOT EXISTS runs (
     count INTEGER,
     status TEXT
 );
+CREATE TABLE IF NOT EXISTS api_calls (
+    ts TEXT,
+    provider TEXT,
+    model TEXT,
+    status TEXT,
+    http_code INTEGER DEFAULT 0,
+    attempt INTEGER DEFAULT 0,
+    latency_ms INTEGER DEFAULT 0,
+    retry_after REAL DEFAULT 0,
+    rl_limit INTEGER DEFAULT 0,
+    rl_remaining INTEGER DEFAULT 0,
+    rl_reset TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0
+);
 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created DESC);
 CREATE INDEX IF NOT EXISTS idx_bench_strategy ON bench(strategy);
+CREATE INDEX IF NOT EXISTS idx_api_calls_ts ON api_calls(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_api_calls_model ON api_calls(model);
 """
 
 
@@ -76,8 +94,11 @@ class Store:
         parent = os.path.dirname(os.path.abspath(path))
         os.makedirs(parent, exist_ok=True)
         self.path = path
-        self.conn = sqlite3.connect(path)
+        # check_same_thread=False + a lock lets the parallel provider fan-out
+        # record telemetry (and cache) from worker threads safely.
+        self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
         self.conn.executescript(SCHEMA)
         self.conn.commit()
         self._ensure_columns()
@@ -154,16 +175,18 @@ class Store:
 
     # ---- AI response cache ---------------------------------------------
     def ai_cache_get(self, key: str) -> Optional[str]:
-        r = self.conn.execute("SELECT response FROM ai_cache WHERE key = ?", (key,)).fetchone()
+        with self._lock:
+            r = self.conn.execute("SELECT response FROM ai_cache WHERE key = ?", (key,)).fetchone()
         return r["response"] if r else None
 
     def ai_cache_put(self, key: str, model: str, prompt: str, response: str) -> None:
-        self.conn.execute(
-            "INSERT INTO ai_cache (key, model, prompt, response, ts) VALUES (?,?,?,?,?) "
-            "ON CONFLICT(key) DO UPDATE SET response=excluded.response, ts=excluded.ts",
-            (key, model, prompt, response, now_iso()),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO ai_cache (key, model, prompt, response, ts) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET response=excluded.response, ts=excluded.ts",
+                (key, model, prompt, response, now_iso()),
+            )
+            self.conn.commit()
 
     # ---- benchmark ------------------------------------------------------
     def add_bench_row(self, strategy: str, task_id: str, score: float, rounds: int,
@@ -186,3 +209,25 @@ class Store:
             (now_iso(), action, count, status),
         )
         self.conn.commit()
+
+    # ---- API-call telemetry (throttle analysis) ------------------------
+    def add_api_call(self, provider: str, model: str, status: str, *, http_code: int = 0,
+                     attempt: int = 0, latency_ms: int = 0, retry_after: float = 0.0,
+                     rl_limit: int = 0, rl_remaining: int = 0, rl_reset: str = "",
+                     tokens_in: int = 0, tokens_out: int = 0) -> None:
+        """Record one HTTP attempt. Thread-safe (called from parallel fan-out)."""
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO api_calls (ts, provider, model, status, http_code, attempt, "
+                "latency_ms, retry_after, rl_limit, rl_remaining, rl_reset, tokens_in, tokens_out) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (now_iso(), provider, model, status, http_code, attempt, latency_ms,
+                 retry_after, rl_limit, rl_remaining, rl_reset, tokens_in, tokens_out),
+            )
+            self.conn.commit()
+
+    def api_calls_recent(self, limit: int = 5000) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM api_calls ORDER BY ts DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]

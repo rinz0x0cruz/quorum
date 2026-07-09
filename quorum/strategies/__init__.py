@@ -19,6 +19,8 @@ _BUILTIN = {
     "moa": "quorum.strategies.moa",
     "refine": "quorum.strategies.refine",
     "ensemble": "quorum.strategies.ensemble",
+    "selfconsistency": "quorum.strategies.selfconsistency",
+    "cascade": "quorum.strategies.cascade",
 }
 
 
@@ -39,12 +41,16 @@ class RunOptions:
     consensus: bool = False
     moa_layers: int = 2
     samples: int = 3
+    samples_min: int = 2
+    adaptive_samples: bool = False
     temperature: float = 0.5
     max_tokens: int = 1200
+    judge_every: int = 1
     anonymize: bool = True
     parallel: bool = True
     top_k: int = 0
     devils_advocate: bool = False
+    cascade: list = field(default_factory=list)  # ordered strategies for the cascade escalation
 
     @classmethod
     def from_cfg(cls, cfg: dict) -> "RunOptions":
@@ -58,12 +64,16 @@ class RunOptions:
             consensus=bool(r.get("consensus", False)),
             moa_layers=max(1, int(r.get("moa_layers", 2))),
             samples=max(1, int(r.get("samples", 3))),
+            samples_min=max(1, int(r.get("samples_min", 2))),
+            adaptive_samples=bool(r.get("adaptive_samples", False)),
             temperature=float(r.get("temperature", 0.5)),
             max_tokens=int(r.get("max_tokens", 1200)),
+            judge_every=max(1, int(r.get("judge_every", 1))),
             anonymize=bool(r.get("anonymize", True)),
             parallel=bool(r.get("parallel", True)),
             top_k=int(r.get("top_k", 0) or 0),
             devils_advocate=bool(r.get("devils_advocate", False)),
+            cascade=list(r.get("cascade", []) or []),
         )
 
 

@@ -77,28 +77,32 @@ def run(ctx: Context):
         ctx.session.account(cturn)
         draft = ccomp.text if ccomp.ok else draft
 
-        # 4) judge the chairman's answer
-        verdict, jturn = judge.evaluate(cfg, prov, r, ctx.task, ctx.prompt,
-                                        [("chairman", draft)], candidate_models=[chair.model],
-                                        store=ctx.store)
-        rnd.turns.append(jturn)
-        ctx.session.account(jturn)
-        rnd.verdict = verdict
+        # 4) judge the chairman's answer (deferrable via run.judge_every)
         rnd.best_content = draft
-        verdicts.append(verdict)
+        if judge.due(r, o.judge_every, max_rounds):
+            verdict, jturn = judge.evaluate(cfg, prov, r, ctx.task, ctx.prompt,
+                                            [("chairman", draft)], candidate_models=[chair.model],
+                                            store=ctx.store)
+            rnd.turns.append(jturn)
+            ctx.session.account(jturn)
+            rnd.verdict = verdict
+            verdicts.append(verdict)
+            ctx.emit(f"round {r}: score {verdict.score:.0f} (chairman)")
+        else:
+            ctx.emit(f"round {r}: (deferred judge)")
         ctx.session.rounds.append(rnd)
-        ctx.emit(f"round {r}: score {verdict.score:.0f} (chairman)")
 
         if cost.over_budget(cfg, ctx.session.cost_usd):
             ctx.session.stop_reason = "cost budget exceeded"
             ctx.session.status = "aborted"
             break
-        stop, reason = judge.should_stop(cfg, verdicts, r)
-        if stop:
-            verdict.stop = True
-            verdict.reason = reason
-            ctx.session.stop_reason = reason
-            break
+        if verdicts and judge.due(r, o.judge_every, max_rounds):
+            stop, reason = judge.should_stop(cfg, verdicts, r)
+            if stop:
+                verdicts[-1].stop = True
+                verdicts[-1].reason = reason
+                ctx.session.stop_reason = reason
+                break
 
     if verdicts:
         best = max(verdicts, key=lambda v: v.score)

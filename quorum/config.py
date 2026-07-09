@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from typing import Any
 
 from .model import ModelSpec
@@ -48,14 +49,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "plateau_patience": 2,      # ... for this many consecutive rounds
         "consensus": False,         # also stop when members converge on one answer
         "moa_layers": 2,            # layers for the mixture-of-agents strategy
-        "samples": 3,               # samples for the ensemble baseline
+        "samples": 3,               # samples for the ensemble baseline (max, when adaptive)
+        "samples_min": 2,           # ensemble: min samples before an adaptive early-stop
+        "adaptive_samples": False,  # ensemble: sample incrementally + stop on a confident majority
         "temperature": 0.5,
         "max_tokens": 1200,
+        "judge_every": 1,          # judge every N rounds (1=every round; >1 saves judge calls in debate/council/refine)
         "anonymize": True,          # hide model identities during peer review
         "parallel": True,           # fan proposer calls out concurrently
+        "rate_limit_rpm": 0,        # pace HTTP calls to <= this many/min per provider (0 = off; ~18 for free OpenRouter)
         "fallbacks": [],            # default alternates ("provider:model") tried when a call fails (e.g. 429)
         "top_k": 0,                 # if >0, fuse only the top-K peer-ranked candidates (council/moa)
         "devils_advocate": False,   # debate: have one member argue the counter-case from round 2 on
+        "cascade": [],              # strategy=cascade: ordered stages, cheapest first (default [refine,debate,council])
     },
 
     # Phase 1: design + refine the solve-prompt before the council answers.
@@ -67,6 +73,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "rubric": {"correctness": 0.40, "completeness": 0.25, "clarity": 0.20, "grounding": 0.15},
         "cross_family_guard": True,  # prefer a judge from a different vendor than the candidate
         "json_mode": False,          # ask the judge/grader endpoint for OpenAI JSON mode (opt-in)
+        "shuffle_candidates": True,  # randomise candidate order to curb LLM-judge position bias
     },
 
     "cost": {
@@ -135,8 +142,12 @@ def _parse_file(path: str) -> dict:
         return yaml.safe_load(fh) or {}
 
 
-def load_config(path: str | None = None) -> dict[str, Any]:
-    """Return the effective config (defaults deep-merged with a user file)."""
+def load_config(path: str | None = None, *, warn: bool = False) -> dict[str, Any]:
+    """Return the effective config (defaults deep-merged with a user file).
+
+    With ``warn=True``, unknown/mistyped keys in the user file are printed to
+    stderr (never fatal) -- a light guard so a typo'd knob does not silently no-op.
+    """
     _load_dotenv()
     if path is None:
         for candidate in CONFIG_CANDIDATES:
@@ -144,8 +155,42 @@ def load_config(path: str | None = None) -> dict[str, Any]:
                 path = candidate
                 break
     if path and os.path.exists(path):
-        return _deep_merge(DEFAULT_CONFIG, _parse_file(path))
+        user = _parse_file(path)
+        if warn:
+            for key in validate_config(user):
+                print(f"  warning: unknown config key '{key}' (ignored)", file=sys.stderr)
+        return _deep_merge(DEFAULT_CONFIG, user)
     return json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
+
+
+# Subtrees whose keys are user-defined (provider names, model prices, rubric
+# criteria) and so must not be flagged as unknown.
+_OPEN_SUBTREES = ("providers", "cost.pricing", "judge.rubric")
+
+
+def _validate_walk(user: Any, default: Any, prefix: str, out: list[str]) -> None:
+    if not isinstance(user, dict):
+        return
+    for k, v in user.items():
+        path = f"{prefix}.{k}" if prefix else k
+        if path in _OPEN_SUBTREES or any(path.startswith(s + ".") for s in _OPEN_SUBTREES):
+            continue
+        if not isinstance(default, dict) or k not in default:
+            out.append(path)
+            continue
+        if isinstance(v, dict) and isinstance(default.get(k), dict):
+            _validate_walk(v, default[k], path, out)
+
+
+def validate_config(user: dict) -> list[str]:
+    """Return the unknown key-paths in a user config (typos). Never raises.
+
+    Open subtrees (``providers.*``, ``cost.pricing.*``, ``judge.rubric.*``) allow
+    arbitrary user-defined keys and are not reported.
+    """
+    out: list[str] = []
+    _validate_walk(user, DEFAULT_CONFIG, "", out)
+    return out
 
 
 # --------------------------------------------------------------------------

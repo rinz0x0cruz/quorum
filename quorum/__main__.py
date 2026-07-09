@@ -11,6 +11,7 @@ Usage:
     python -m quorum serve [--open]               Serve the dashboard locally
     python -m quorum export [--format json|csv|md] [--session id]
     python -m quorum models [--ping]              List council members (and check reachability)
+    python -m quorum throttle                     Analyze API rate-limit/throttle telemetry
     python -m quorum selftest                     Offline self-tests (no network)
 
 Live deliberation talks to the OpenAI-compatible endpoints you configure; the
@@ -155,6 +156,12 @@ def cmd_models(args, cfg):
     return provider.list_models(cfg, ping=args.ping)
 
 
+def cmd_throttle(args, cfg):
+    from . import throttle
+    with _store(cfg) as store:
+        return throttle.run(cfg, store, provider=args.provider, probe=not args.no_probe)
+
+
 def cmd_selftest(args, cfg):
     from . import selftest
     return selftest.run()
@@ -177,7 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("run", help="Deliberate to a good-enough solution")
     sp.add_argument("task", help="The question or task to solve")
     sp.add_argument("--strategy", default=None,
-                    choices=["debate", "council", "moa", "refine", "ensemble"],
+                    choices=["debate", "council", "moa", "refine", "ensemble", "selfconsistency", "cascade"],
                     help="Override the configured strategy")
     sp.add_argument("--rounds", type=int, default=None, help="Override max rounds")
     sp.add_argument("--target", type=float, default=None, help="Override target score (0-100)")
@@ -224,7 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--user", default=None, help="User message (default: read from stdin)")
     sp.add_argument("--system", default="", help="System / instruction prompt")
     sp.add_argument("--strategy", default=None,
-                    choices=["debate", "council", "moa", "refine", "ensemble"],
+                    choices=["debate", "council", "moa", "refine", "ensemble", "selfconsistency", "cascade"],
                     help="Override the configured strategy")
     sp.add_argument("--json", action="store_true",
                     help="Emit JSON {content, strategy, status, tokens, cost_usd}")
@@ -240,6 +247,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ping", action="store_true", help="Check each endpoint is reachable")
     sp.set_defaults(func=cmd_models)
 
+    sp = sub.add_parser("throttle", help="Analyze recorded API rate-limit/throttle telemetry")
+    sp.add_argument("--provider", default="openrouter",
+                    help="Provider whose key quota to probe (default: openrouter)")
+    sp.add_argument("--no-probe", action="store_true",
+                    help="Skip the live key/quota probe (offline: telemetry only)")
+    sp.set_defaults(func=cmd_throttle)
+
     sub.add_parser("selftest", help="Offline self-tests").set_defaults(func=cmd_selftest)
     return p
 
@@ -248,7 +262,7 @@ def main(argv=None) -> int:
     _force_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, warn=True)
     if args.db:
         cfg["output"]["db_path"] = args.db
     return args.func(args, cfg)
