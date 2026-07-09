@@ -43,6 +43,10 @@ run:
   max_tokens: 1200
   anonymize: true          # hide model identities during peer review
   parallel: true           # fan proposer calls out concurrently
+  # Pace HTTP calls to at most this many per minute, per provider (0 = off). Free
+  # OpenRouter :free models cap at 20/min globally -- set ~18 to avoid 429 bursts.
+  # A provider profile can override this with its own `rpm:` field.
+  rate_limit_rpm: 0
   # Default alternates tried, in order, when a member/role call fails (e.g. free-tier 429).
   # Applies to any member/role without its own fallbacks, e.g. [openrouter:google/gemma-4-31b-it:free]
   fallbacks: []

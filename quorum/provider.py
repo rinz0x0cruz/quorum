@@ -16,6 +16,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -139,6 +140,38 @@ def _rl_from_headers(headers: Any) -> tuple[int, int, str]:
 
 
 # --------------------------------------------------------------------------
+# rate limiting
+# --------------------------------------------------------------------------
+class RateLimiter:
+    """Pace :meth:`acquire` calls to at most ``rpm`` per minute (thread-safe).
+
+    Shared across a provider's parallel fan-out so bursts are spread out instead
+    of tripping a per-minute cap (free tiers throttle ~20 req/min). It advances a
+    single ``next allowed time`` cursor under a lock, then sleeps outside it, so N
+    concurrent threads are spaced by ``60/rpm`` seconds. ``rpm <= 0`` disables it.
+    """
+
+    def __init__(self, rpm: float):
+        self.rpm = float(rpm or 0)
+        self.interval = 60.0 / self.rpm if self.rpm > 0 else 0.0
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def acquire(self) -> float:
+        """Block until a slot is free; return the seconds waited (0 if disabled)."""
+        if self.rpm <= 0:
+            return 0.0
+        with self._lock:
+            now = time.monotonic()
+            start = now if now >= self._next else self._next
+            self._next = start + self.interval
+            wait = start - now
+        if wait > 0:
+            time.sleep(wait)
+        return wait
+
+
+# --------------------------------------------------------------------------
 # provider
 # --------------------------------------------------------------------------
 class Provider:
@@ -152,6 +185,8 @@ class Provider:
         self.max_retries = max_retries      # retries on 429/5xx (free tiers throttle)
         self.backoff = backoff              # initial backoff seconds (doubles each retry)
         self.telemetry = telemetry          # Store-like sink for per-attempt throttle logs
+        self._limiters: dict[str, RateLimiter] = {}
+        self._limiters_lock = threading.Lock()
 
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
@@ -194,6 +229,24 @@ class Provider:
         if spec.provider == "mock":
             return self._finish(spec, messages, self.mock.respond(spec, messages), t0)
         return self._http(spec, messages, temp, maxt, t0, response_format)
+
+    def _limiter(self, provider: str) -> RateLimiter:
+        """The (lazily built, shared) rate limiter for a provider."""
+        lim = self._limiters.get(provider)
+        if lim is None:
+            with self._limiters_lock:
+                lim = self._limiters.get(provider)
+                if lim is None:
+                    lim = RateLimiter(self._rpm_for(provider))
+                    self._limiters[provider] = lim
+        return lim
+
+    def _rpm_for(self, provider: str) -> float:
+        """Per-minute budget for a provider: ``providers.<p>.rpm`` else ``run.rate_limit_rpm``."""
+        pconf = provider_conf(self.cfg, provider)
+        if pconf.get("rpm") is not None:
+            return float(pconf.get("rpm") or 0)
+        return float((self.cfg.get("run", {}) or {}).get("rate_limit_rpm", 0) or 0)
 
     def _finish(self, spec: ModelSpec, messages: list[dict[str, str]], text: str,
                 t0: float, tokens_out: Optional[int] = None) -> Completion:
@@ -249,7 +302,9 @@ class Provider:
             headers["Authorization"] = f"Bearer {k}"
 
         delay, last_err = self.backoff, ""
+        limiter = self._limiter(spec.provider)
         for attempt in range(self.max_retries + 1):
+            limiter.acquire()
             a0 = time.time()
             req = urllib.request.Request(base + "/chat/completions", data=payload,
                                          headers=headers, method="POST")

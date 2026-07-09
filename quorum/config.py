@@ -53,6 +53,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 1200,
         "anonymize": True,          # hide model identities during peer review
         "parallel": True,           # fan proposer calls out concurrently
+        "rate_limit_rpm": 0,        # pace HTTP calls to <= this many/min per provider (0 = off; ~18 for free OpenRouter)
         "fallbacks": [],            # default alternates ("provider:model") tried when a call fails (e.g. 429)
         "top_k": 0,                 # if >0, fuse only the top-K peer-ranked candidates (council/moa)
         "devils_advocate": False,   # debate: have one member argue the counter-case from round 2 on

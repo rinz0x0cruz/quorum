@@ -1,6 +1,7 @@
 """Throttle telemetry + analyzer (offline)."""
 import email.message
 import json
+import time
 
 from quorum import provider, throttle
 from quorum.model import ModelSpec
@@ -103,3 +104,19 @@ def test_provider_records_throttle(tmp_path, monkeypatch):
     store.close()
     assert rows and rows[0]["status"] == "HTTP 429" and rows[0]["http_code"] == 429
     assert rows[0]["retry_after"] == 2.0
+
+
+def test_rate_limiter_disabled_is_instant():
+    rl = provider.RateLimiter(0)
+    t0 = time.monotonic()
+    for _ in range(5):
+        assert rl.acquire() == 0.0
+    assert time.monotonic() - t0 < 0.05
+
+
+def test_rate_limiter_paces_calls():
+    rl = provider.RateLimiter(1200)          # 0.05s between calls
+    first = rl.acquire()                     # fresh bucket -> no wait
+    second = rl.acquire()                    # must wait ~interval
+    assert first == 0.0
+    assert second > 0.0

@@ -365,5 +365,12 @@ def run() -> int:
                      {"total": 1, "throttled": 1, "peak_rpm": {"openrouter": 20}, "by_model": {}},
                      cfg, None)))
 
+            # --- rate limiter (paces HTTP bursts under a per-minute cap) ---
+            from .provider import RateLimiter as _RL
+            c.ok("rate limiter disabled -> no wait", _RL(0).acquire() == 0.0)
+            _rl = _RL(1200)  # 0.05s interval
+            _w1, _w2 = _rl.acquire(), _rl.acquire()
+            c.ok("rate limiter paces 2nd call", _w1 == 0.0 and _w2 > 0.0)
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1
