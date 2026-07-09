@@ -122,6 +122,16 @@ def test_rate_limiter_paces_calls():
     assert second > 0.0
 
 
+def test_providers_share_process_wide_limiter():
+    provider.reset_rate_limiters()
+    cfg = {"providers": {"p": {"base_url": "http://x", "rpm": 30}}, "run": {}}
+    a = provider.Provider(cfg)
+    b = provider.Provider(cfg)
+    assert a._limiter("p") is b._limiter("p")   # one shared limiter per provider, process-wide
+    assert a._limiter("p").rpm == 30
+    provider.reset_rate_limiters()
+
+
 def test_throttle_run_prints_report(tmp_path, capsys):
     store = Store(str(tmp_path / "t.db"))
     for _ in range(3):

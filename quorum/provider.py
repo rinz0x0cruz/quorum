@@ -177,6 +177,29 @@ class RateLimiter:
         return wait
 
 
+# Process-wide per-provider limiters, so every Provider in this process (bench
+# tasks, server requests, a long-running embed host) shares one pacing budget per
+# provider -- a fresh Provider per call would otherwise reset pacing and let
+# bursts through, defeating the point on free tiers.
+_LIMITERS: dict[str, RateLimiter] = {}
+_LIMITERS_LOCK = threading.Lock()
+
+
+def _shared_limiter(name: str, rpm: float) -> RateLimiter:
+    with _LIMITERS_LOCK:
+        lim = _LIMITERS.get(name)
+        if lim is None or lim.rpm != rpm:
+            lim = RateLimiter(rpm)
+            _LIMITERS[name] = lim
+        return lim
+
+
+def reset_rate_limiters() -> None:
+    """Clear the process-wide limiter registry (test hygiene / reconfiguration)."""
+    with _LIMITERS_LOCK:
+        _LIMITERS.clear()
+
+
 # --------------------------------------------------------------------------
 # provider
 # --------------------------------------------------------------------------
@@ -193,8 +216,6 @@ class Provider:
         self.backoff = backoff              # initial backoff seconds (doubles each retry)
         self.retry_429 = retry_429          # fewer retries on 429: a per-minute cap won't clear in seconds -> rotate to a fallback instead
         self.telemetry = telemetry          # Store-like sink for per-attempt throttle logs
-        self._limiters: dict[str, RateLimiter] = {}
-        self._limiters_lock = threading.Lock()
 
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
@@ -239,15 +260,8 @@ class Provider:
         return self._http(spec, messages, temp, maxt, t0, response_format)
 
     def _limiter(self, provider: str) -> RateLimiter:
-        """The (lazily built, shared) rate limiter for a provider."""
-        lim = self._limiters.get(provider)
-        if lim is None:
-            with self._limiters_lock:
-                lim = self._limiters.get(provider)
-                if lim is None:
-                    lim = RateLimiter(self._rpm_for(provider))
-                    self._limiters[provider] = lim
-        return lim
+        """The process-wide, shared rate limiter for a provider."""
+        return _shared_limiter(provider, self._rpm_for(provider))
 
     def _rpm_for(self, provider: str) -> float:
         """Per-minute budget for a provider: ``providers.<p>.rpm`` else ``run.rate_limit_rpm``."""

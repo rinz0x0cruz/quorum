@@ -31,7 +31,11 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
         print(f"  no tasks found in {tasks_path}")
         return 1
 
-    prov = provider.for_config(cfg)
+    # One shared provider across every task + grading, so a single rate limiter
+    # paces the whole bench under the per-minute cap (a fresh provider per task
+    # would reset the limiter and let bursts through) and all attempts land in the
+    # same throttle telemetry.
+    prov = provider.for_config(cfg, store=store)
     graded_mode = any(t.get("reference") for t in tasks)
 
     rows: list[dict[str, Any]] = []
@@ -42,7 +46,7 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
                 rcfg.setdefault("judge", {})["rubric"] = task["rubric"]
             t0 = time.time()
             sess = orchestrator.run_session(rcfg, task["task"], store=store,
-                                            strategy=strat, verbose=False)
+                                            strategy=strat, prov=prov, verbose=False)
             secs = time.time() - t0
 
             errored = (sess.status != "ok") or not (sess.final or "").strip()

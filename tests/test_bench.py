@@ -28,3 +28,24 @@ def test_bench_run_offline(tmp_path):
         rc = bench.run(cfg, str(tasks), ["debate", "moa", "ensemble"], store, verbose=False)
         assert rc == 0
         assert len(store.bench_rows()) == 6  # 2 tasks x 3 strategies
+
+
+def test_bench_shares_one_provider_across_tasks(tmp_path, monkeypatch):
+    from quorum import orchestrator
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text("tasks:\n  - id: one\n    task: t1\n  - id: two\n    task: t2\n",
+                     encoding="utf-8")
+    seen = []
+    orig = orchestrator.run_session
+
+    def _spy(cfg2, task, **kw):
+        seen.append(kw.get("prov"))
+        return orig(cfg2, task, **kw)
+
+    monkeypatch.setattr(orchestrator, "run_session", _spy)
+    with Store(cfg["output"]["db_path"]) as store:
+        bench.run(cfg, str(tasks), ["debate", "refine"], store, verbose=False)
+    assert len(seen) == 4                       # 2 tasks x 2 strategies
+    assert seen[0] is not None
+    assert all(p is seen[0] for p in seen)      # one shared provider -> one rate limiter

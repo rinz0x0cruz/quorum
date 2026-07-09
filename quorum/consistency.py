@@ -29,7 +29,7 @@ def _key(text: str) -> str:
 
 def assign(clusters: list[dict], text: str, *, sim_threshold: float = _SIM) -> list[dict]:
     """Add ``text`` to a matching bucket (or open a new one). Mutates + returns clusters."""
-    if not text:
+    if not text or not text.strip():
         return clusters
     key = _key(text)
     if key:  # numeric: exact bucket by the final number
