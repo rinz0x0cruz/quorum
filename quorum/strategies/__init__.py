@@ -20,6 +20,8 @@ _BUILTIN = {
     "refine": "quorum.strategies.refine",
     "ensemble": "quorum.strategies.ensemble",
     "selfconsistency": "quorum.strategies.selfconsistency",
+    "reflexion": "quorum.strategies.reflexion",
+    "verify": "quorum.strategies.verify",
     "cascade": "quorum.strategies.cascade",
 }
 

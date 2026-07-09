@@ -65,6 +65,14 @@ class MockResponder:
             return self._grade(user)
         if "QUORUM-USC" in system:
             return self._usc(user)
+        if "QUORUM-REFLECT" in system:
+            return self._reflect(user)
+        if "QUORUM-VERIFY-PLAN" in system:
+            return self._verify_plan(user)
+        if "QUORUM-VERIFY-ANSWER" in system:
+            return self._verify_answer(user)
+        if "QUORUM-VERIFY-REVISE" in system:
+            return self._verify_revise(spec, user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -94,6 +102,19 @@ class MockResponder:
     def _usc(self, user: str) -> str:
         labels = re.findall(r"CANDIDATE (\w+)", user or "") or ["A"]
         return json.dumps({"choice": labels[0]})
+
+    def _reflect(self, user: str) -> str:
+        return ("Reflection: the previous answer under-specified a step; next time decompose the "
+                "problem and verify each part against the requirements before answering.")
+
+    def _verify_plan(self, user: str) -> str:
+        return "1. Is the main claim correct?\n2. Are the stated assumptions valid?"
+
+    def _verify_answer(self, user: str) -> str:
+        return "1. Yes, the main claim holds.\n2. The stated assumptions are valid."
+
+    def _verify_revise(self, spec: ModelSpec, user: str) -> str:
+        return f"[{spec.model}] Verified final answer, corrected against the checks."
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

@@ -245,6 +245,17 @@ def run() -> int:
             c.ok("selfconsistency reaches consensus",
                  bool(_sc.final) and "self-consistency" in _sc.stop_reason and _sc.final_score > 0)
 
+            # --- reflexion + chain-of-verification ------------------------
+            _rx = orchestrator.run_session(cfg, "reflexion q", store=store, strategy="reflexion",
+                                           promptsmith_on=False)
+            c.ok("reflexion reflects + solves",
+                 bool(_rx.final) and any(t.kind == "reflect" for r in _rx.rounds for t in r.turns))
+            _vf = orchestrator.run_session(cfg, "verify q", store=store, strategy="verify",
+                                           promptsmith_on=False)
+            c.ok("verify runs full pipeline",
+                 bool(_vf.final) and {"draft", "verify", "revise"}
+                 <= {t.kind for r in _vf.rounds for t in r.turns})
+
             # --- config validation (#7): warn on unknown keys -------------
             from .config import validate_config as _vc
             c.ok("config validate clean", _vc({"run": {"max_rounds": 3}}) == [])

@@ -30,6 +30,15 @@ from .base import (
 from .council import CHAIRMAN_SYSTEM, REVIEW_SYSTEM, review, synthesize
 from .debate import CHALLENGER_SYSTEM, challenge
 from .moa import AGGREGATOR_SYSTEM, MOA_LAYER_SYSTEM, aggregate, moa_layer
+from .reflexion import REFLECT_SYSTEM, REFLEXION_ACTOR_SYSTEM, reflect, reflexion_actor
+from .verify import (
+    VERIFY_ANSWER_SYSTEM,
+    VERIFY_PLAN_SYSTEM,
+    VERIFY_REVISE_SYSTEM,
+    plan_checks,
+    verified_final,
+    verify_checks,
+)
 
 __all__ = [
     # system prompts (mock provider keys off the QUORUM-* sentinels)
@@ -42,6 +51,11 @@ __all__ = [
     "AGGREGATOR_SYSTEM",
     "MOA_LAYER_SYSTEM",
     "USC_SYSTEM",
+    "REFLECT_SYSTEM",
+    "REFLEXION_ACTOR_SYSTEM",
+    "VERIFY_PLAN_SYSTEM",
+    "VERIFY_ANSWER_SYSTEM",
+    "VERIFY_REVISE_SYSTEM",
     # message builders
     "propose",
     "revise",
@@ -53,4 +67,9 @@ __all__ = [
     "moa_layer",
     "aggregate",
     "usc",
+    "reflect",
+    "reflexion_actor",
+    "plan_checks",
+    "verify_checks",
+    "verified_final",
 ]
