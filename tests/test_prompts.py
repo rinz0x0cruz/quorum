@@ -19,6 +19,11 @@ EXPECTED_SYSTEMS = [
     "AGGREGATOR_SYSTEM",
     "MOA_LAYER_SYSTEM",
     "USC_SYSTEM",
+    "REFLECT_SYSTEM",
+    "REFLEXION_ACTOR_SYSTEM",
+    "VERIFY_PLAN_SYSTEM",
+    "VERIFY_ANSWER_SYSTEM",
+    "VERIFY_REVISE_SYSTEM",
 ]
 
 EXPECTED_BUILDERS = [
@@ -32,6 +37,11 @@ EXPECTED_BUILDERS = [
     "moa_layer",
     "aggregate",
     "usc",
+    "reflect",
+    "reflexion_actor",
+    "plan_checks",
+    "verify_checks",
+    "verified_final",
 ]
 
 

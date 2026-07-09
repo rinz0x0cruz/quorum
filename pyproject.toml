@@ -31,6 +31,8 @@ moa = "quorum.strategies.moa:run"
 refine = "quorum.strategies.refine:run"
 ensemble = "quorum.strategies.ensemble:run"
 selfconsistency = "quorum.strategies.selfconsistency:run"
+reflexion = "quorum.strategies.reflexion:run"
+verify = "quorum.strategies.verify:run"
 cascade = "quorum.strategies.cascade:run"
 
 # Text scorers are plugins too: register a class or instance resolving to a
