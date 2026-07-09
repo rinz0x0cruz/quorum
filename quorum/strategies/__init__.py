@@ -44,6 +44,7 @@ class RunOptions:
     adaptive_samples: bool = False
     temperature: float = 0.5
     max_tokens: int = 1200
+    judge_every: int = 1
     anonymize: bool = True
     parallel: bool = True
     top_k: int = 0
@@ -66,6 +67,7 @@ class RunOptions:
             adaptive_samples=bool(r.get("adaptive_samples", False)),
             temperature=float(r.get("temperature", 0.5)),
             max_tokens=int(r.get("max_tokens", 1200)),
+            judge_every=max(1, int(r.get("judge_every", 1))),
             anonymize=bool(r.get("anonymize", True)),
             parallel=bool(r.get("parallel", True)),
             top_k=int(r.get("top_k", 0) or 0),

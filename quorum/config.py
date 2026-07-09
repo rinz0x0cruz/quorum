@@ -53,6 +53,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "adaptive_samples": False,  # ensemble: sample incrementally + stop on a confident majority
         "temperature": 0.5,
         "max_tokens": 1200,
+        "judge_every": 1,          # judge every N rounds (1=every round; >1 saves judge calls in debate/council/refine)
         "anonymize": True,          # hide model identities during peer review
         "parallel": True,           # fan proposer calls out concurrently
         "rate_limit_rpm": 0,        # pace HTTP calls to <= this many/min per provider (0 = off; ~18 for free OpenRouter)

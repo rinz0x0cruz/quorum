@@ -228,6 +228,15 @@ def run() -> int:
             c.ok("ensemble adaptive early-stops",
                  len(_adaprop) == 2 and "adaptive vote" in _ada.stop_reason)
 
+            # --- judge cadence (run.judge_every defers judge calls) -------
+            c.ok("judge.due skips mid, keeps ends",
+                 judge.due(1, 2, 4) and judge.due(4, 2, 4) and not judge.due(3, 2, 4))
+            _jc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"judge_every": 2, "max_rounds": 4, "target_score": 200}}),
+                "cadence q", store=store, strategy="refine", promptsmith_on=False)
+            _jturns = [t for r in _jc.rounds for t in r.turns if t.kind == "judge"]
+            c.ok("refine judges 3 of 4 rounds", len(_jturns) == 3)
+
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
                 _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),

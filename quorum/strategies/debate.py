@@ -59,29 +59,34 @@ def run(ctx: Context):
             ctx.session.stop_reason = "all members failed"
             break
 
-        verdict, jturn = judge.evaluate(cfg, prov, r, ctx.task, ctx.prompt, candidates,
-                                        candidate_models=cand_models, store=ctx.store)
-        rnd.turns.append(jturn)
-        ctx.session.account(jturn)
-        rnd.verdict = verdict
-        rnd.best_content = verdict.best_content
-        verdicts.append(verdict)
+        rnd.best_content = candidates[0][1]
+        if judge.due(r, o.judge_every, max_rounds):
+            verdict, jturn = judge.evaluate(cfg, prov, r, ctx.task, ctx.prompt, candidates,
+                                            candidate_models=cand_models, store=ctx.store)
+            rnd.turns.append(jturn)
+            ctx.session.account(jturn)
+            rnd.verdict = verdict
+            rnd.best_content = verdict.best_content
+            verdicts.append(verdict)
+            ctx.emit(f"round {r}: score {verdict.score:.0f} (best={verdict.best_label})")
+        else:
+            ctx.emit(f"round {r}: (deferred judge)")
         ctx.session.rounds.append(rnd)
-        ctx.emit(f"round {r}: score {verdict.score:.0f} (best={verdict.best_label})")
 
         if cost.over_budget(cfg, ctx.session.cost_usd):
             ctx.session.stop_reason = "cost budget exceeded"
             ctx.session.status = "aborted"
             break
 
-        stop, reason = judge.should_stop(cfg, verdicts, r)
-        if not stop and o.consensus and judge.consensus_reached(list(latest.values())):
-            stop, reason = True, "members reached consensus"
-        if stop:
-            verdict.stop = True
-            verdict.reason = reason
-            ctx.session.stop_reason = reason
-            break
+        if verdicts and judge.due(r, o.judge_every, max_rounds):
+            stop, reason = judge.should_stop(cfg, verdicts, r)
+            if not stop and o.consensus and judge.consensus_reached(list(latest.values())):
+                stop, reason = True, "members reached consensus"
+            if stop:
+                verdicts[-1].stop = True
+                verdicts[-1].reason = reason
+                ctx.session.stop_reason = reason
+                break
 
     if verdicts:
         best = max(verdicts, key=lambda v: v.score)

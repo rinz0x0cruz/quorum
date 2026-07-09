@@ -100,6 +100,18 @@ def should_stop(cfg: dict, verdicts: list[Verdict], round_index: int) -> tuple[b
     return False, ""
 
 
+def due(round_index: int, every: int, max_rounds: int) -> bool:
+    """Whether to run the (paid) judge this round when ``run.judge_every`` > 1.
+
+    Always judges the first and last round (so there is an initial critique and a
+    fresh final score); otherwise every ``every`` rounds. ``every <= 1`` judges
+    every round (the default, unchanged behaviour).
+    """
+    if every <= 1:
+        return True
+    return round_index == 1 or round_index >= max_rounds or (round_index % every == 0)
+
+
 def consensus_reached(contents: list[str], threshold: float = 0.8) -> bool:
     """Cheap convergence check: mean pairwise token-Jaccard over member answers."""
     texts = [c for c in contents if c]
