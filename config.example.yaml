@@ -38,7 +38,9 @@ run:
   plateau_patience: 2      # ... for this many consecutive rounds
   consensus: false         # also stop when members converge on one answer
   moa_layers: 2            # layers for the mixture-of-agents strategy
-  samples: 3               # samples for the ensemble baseline
+  samples: 3               # ensemble: number of samples (the max/budget when adaptive)
+  samples_min: 2           # ensemble: min samples before an adaptive early-stop
+  adaptive_samples: false  # ensemble: sample one at a time, stop on a confident majority (fewer calls)
   temperature: 0.5
   max_tokens: 1200
   anonymize: true          # hide model identities during peer review

@@ -40,6 +40,8 @@ class RunOptions:
     consensus: bool = False
     moa_layers: int = 2
     samples: int = 3
+    samples_min: int = 2
+    adaptive_samples: bool = False
     temperature: float = 0.5
     max_tokens: int = 1200
     anonymize: bool = True
@@ -60,6 +62,8 @@ class RunOptions:
             consensus=bool(r.get("consensus", False)),
             moa_layers=max(1, int(r.get("moa_layers", 2))),
             samples=max(1, int(r.get("samples", 3))),
+            samples_min=max(1, int(r.get("samples_min", 2))),
+            adaptive_samples=bool(r.get("adaptive_samples", False)),
             temperature=float(r.get("temperature", 0.5)),
             max_tokens=int(r.get("max_tokens", 1200)),
             anonymize=bool(r.get("anonymize", True)),

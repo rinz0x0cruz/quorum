@@ -48,7 +48,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "plateau_patience": 2,      # ... for this many consecutive rounds
         "consensus": False,         # also stop when members converge on one answer
         "moa_layers": 2,            # layers for the mixture-of-agents strategy
-        "samples": 3,               # samples for the ensemble baseline
+        "samples": 3,               # samples for the ensemble baseline (max, when adaptive)
+        "samples_min": 2,           # ensemble: min samples before an adaptive early-stop
+        "adaptive_samples": False,  # ensemble: sample incrementally + stop on a confident majority
         "temperature": 0.5,
         "max_tokens": 1200,
         "anonymize": True,          # hide model identities during peer review

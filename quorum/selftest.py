@@ -215,6 +215,19 @@ def run() -> int:
             c.ok("cascade stops at cheap stage",
                  _casc.stop_reason.startswith("cascade: refine reached target") and bool(_casc.final))
 
+            # --- adaptive-consistency (fewer samples via early stop) ------
+            from . import consistency as _cons
+            c.ok("consistency clusters numeric",
+                 _cons.leader(_cons.cluster(["ans 5", "so 5", "no 7"]))["count"] == 2)
+            c.ok("consistency confident on majority",
+                 _cons.confident(_cons.cluster(["5", "5", "5"])) is True)
+            _ada = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"adaptive_samples": True, "samples": 10, "samples_min": 2}}),
+                "adaptive q", store=store, strategy="ensemble", promptsmith_on=False)
+            _adaprop = [t for r in _ada.rounds for t in r.turns if t.kind == "propose"]
+            c.ok("ensemble adaptive early-stops",
+                 len(_adaprop) == 2 and "adaptive vote" in _ada.stop_reason)
+
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
                 _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),
