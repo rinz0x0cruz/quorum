@@ -50,12 +50,12 @@ Grouped by layer (all under `quorum/quorum/`).
 | `orchestrator.py` | The pipeline: promptsmith → context preamble → pre-hooks → strategy → post-hooks → persist | `run_session(...)` |
 | `strategies/__init__.py` | Strategy **registry** + entry-point discovery + shared `Context` + resolved `RunOptions` | `Context`, `RunOptions`, `get`, `available` |
 | `hooks.py` | Pre/post extension hooks around the strategy (retrieval, filters, post-processing) | `register_pre`, `register_post`, `run_pre/post` |
-| `strategies/{debate,council,moa,refine,ensemble}.py` | The deliberation algorithms | each exposes `run(ctx)` |
+| `strategies/{debate,council,moa,refine,ensemble,selfconsistency,cascade}.py` | The deliberation algorithms | each exposes `run(ctx)` |
 
 ### Reasoning services — the moving parts a strategy composes
 | Module | Responsibility | Key symbols |
 |---|---|---|
-| `provider.py` | All model I/O: mock-or-HTTP, retry/backoff, **fallbacks**, `response_format`, fan-out | `Provider`, `Completion`, `MockResponder` |
+| `provider.py` | All model I/O: mock-or-HTTP, retry/backoff, **fallbacks**, a per-provider **rate limiter**, per-attempt **throttle telemetry**, `response_format`, fan-out | `Provider`, `Completion`, `MockResponder`, `RateLimiter` |
 | `judge.py` | Score a round vs a rubric; decide when to stop | `evaluate`, `should_stop`, `consensus_reached` |
 | `prompts/` | System prompts + message builders (framed DATA-not-instructions); a **package** split by concern -- shared framing + generic builders in `base`, strategy-specific builders in `debate`/`council`/`moa`; every name re-exported via `__init__` | `propose`, `revise`, `challenge`, `synthesize`, `aggregate`, ... |
 | `promptsmith.py` | Phase-1 OPRO prompt refinement + few-shot bootstrap | `refine`, `_exemplars` |
@@ -63,6 +63,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `contextwindow.py` | Pack caller history + grounding docs into a DATA-framed preamble | `ContextDoc`, `pack`, `select`, `preamble` |
 | `grade.py` | Reference-based grading (numeric/deterministic or AI grader) | `numeric_match`, `extract_gold`, `grade` |
 | `scoring/` | Shared lexical text-scoring primitives + a `Scorer` protocol & registry (leaf) | `tokens`, `overlap_coeff`, `jaccard`, `LexicalScorer`, `register`/`get`/`available` |
+| `consistency.py` | Cluster sampled answers (numeric-exact / lexical) + the adaptive-consistency stopping rule (leaf) | `assign`, `leader`, `confident`, `cluster` |
 
 ### Domain & data
 | Module | Responsibility | Key symbols |
@@ -80,6 +81,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `format.py` | Plain-text transcript for `run`/`show` |
 | `exporter.py` | Export a session as JSON / CSV / Markdown |
 | `serve.py` | Serve the dashboard over local HTTP |
+| `throttle.py` | Analyze rate-limit telemetry (`quorum throttle`): per-model 429 rate, req/min vs the free ceiling, `/api/v1/key` quota probe, recommendations |
 | `scaffold.py` | `init` — non-destructive config + data dir |
 | `selftest.py` | ~90 offline checks; the extensibility contract in executable form |
 
@@ -255,7 +257,7 @@ shippable; none changes behavior.
 | 4 | ~~`api.build_config` and serveapi request-mapping both translate *external → quorum*~~ | **Shipped**: a `quorum/adapters.py` entry-layer helper -- `host_config` (host `ai:`/`quorum:` -> quorum config), `split_messages` (OpenAI messages -> system/history/last_user), `select_strategy` (model field -> strategy). `api.build_config` is a thin wrapper and `serveapi._split`/`complete_chat` delegate, so both surfaces share one implementation | `adapters.py`, `api.py`, `serveapi.py` | ✅ done |
 | 5 | ~~`prompts.py` is a flat grab-bag; strategy-specific builders (e.g. `challenge`) bloat it~~ | **Shipped**: a `prompts/` package split by concern -- the shared DATA/LLM01 framing helpers + generic builders (`propose`/`revise`/`self_refine`/`revise_from_draft`) in `base`, and the strategy-specific builders alongside their strategy (`debate.challenge`, `council.review`/`synthesize`, `moa.moa_layer`/`aggregate`). `__init__` re-exports every builder + SYSTEM constant, so `prompts.<name>` (and the `mock` sentinels) resolve byte-identically -- no call site changed | `prompts/`, `strategies/*` | ✅ done |
 | 6 | `provider.py` bundles routing + transport (retry/fallback/json-mode) + accounting | Split a **transport** layer from a `Provider` protocol so alternate backends (embeddings, streaming, optional litellm) register like strategies | `provider.py` | Low* |
-| 7 | No config validation — a mistyped key silently no-ops | A light **known-keys validator** that warns on unknown paths | `config.py` | Low |
+| 7 | ~~No config validation — a mistyped key silently no-ops~~ | **Shipped**: `config.validate_config` reports unknown key-paths and `load_config(warn=True)` prints them (open subtrees `providers.*`/`cost.pricing.*`/`judge.rubric.*` allowed); the CLI enables it. Never fatal | `config.py` | ✅ done |
 | 8 | `emit` is an ad-hoc string logger | A minimal structured **event/hook** interface for observability as flows deepen | `orchestrator.py`, `strategies/*` | Low |
 
 \* Low unless a non-OpenAI or multi-backend provider lands on the roadmap — then #6 jumps to High.
