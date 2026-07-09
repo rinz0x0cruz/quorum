@@ -18,7 +18,8 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
                 solve_prompt: Optional[str] = None,
                 history: Optional[list] = None, context: Optional[list] = None,
                 verbose: bool = False, prov: Any = None,
-                emit: Optional[Callable[[str], None]] = None) -> Session:
+                emit: Optional[Callable[[str], None]] = None,
+                on_event: Optional[Callable[[Any], None]] = None) -> Session:
     # CLI passes promptsmith=<bool>; keep that name working too.
     if promptsmith is not None:
         promptsmith_on = promptsmith
@@ -34,7 +35,18 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
 
     prov = prov or provider_mod.for_config(cfg, store=store)
     members = member_specs(cfg)
-    log = emit or ((lambda s: print("  " + s)) if verbose else (lambda s: None))
+    from . import events
+    human = emit or ((lambda s: print("  " + s)) if verbose else (lambda s: None))
+
+    def log(x: Any) -> None:
+        ev = events.coerce(x)
+        if on_event is not None:
+            try:
+                on_event(ev)
+            except Exception:  # noqa: BLE001 - observability must never break a run
+                pass
+        human(events.render(ev))
+
     session = Session(id=session_id(task, strat_name), task=task, strategy=strat_name)
 
     # phase 1: prompt design/refinement.
@@ -46,6 +58,7 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
         prompt = task
         if promptsmith_on and (cfg.get("promptsmith", {}) or {}).get("enabled", False):
             from . import promptsmith as ps  # local alias (param shadows module name)
+            log(events.Event("phase", "promptsmith: refining prompt", data={"phase": "promptsmith"}))
             prompt = ps.refine(cfg, prov, task, store=store, session=session, emit=log)
     session.prompt = prompt
 
@@ -65,9 +78,14 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
                              members=members, session=session, emit=log,
                              opts=strategies.RunOptions.from_cfg(cfg))
     hooks.run_pre(ctx)
+    log(events.Event("phase", f"strategy: {strat_name}",
+                     data={"phase": "strategy", "strategy": strat_name}))
     strat = strategies.get(strat_name)
     strat(ctx)
     hooks.run_post(ctx)
+    log(events.Event("done", f"done: score {session.final_score:.0f} ({session.status})",
+                     data={"phase": "done", "score": session.final_score,
+                           "status": session.status, "stop_reason": session.stop_reason}))
 
     # Persist only when the store is a quorum store (embed callers may pass their
     # own tool's store, which only implements the AI cache).

@@ -84,5 +84,5 @@ def run(ctx: Context):
     ctx.session.final = acomp.text
     ctx.session.final_score = verdict.score
     ctx.session.stop_reason = f"completed {layers} layers"
-    ctx.emit(f"aggregate: score {verdict.score:.0f}")
+    ctx.event("result", f"aggregate: score {verdict.score:.0f}", score=verdict.score)
     return ctx.session

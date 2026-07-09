@@ -55,7 +55,7 @@ def run(ctx: Context):
     ctx.session.final = verdict.best_content
     ctx.session.final_score = verdict.score
     ctx.session.stop_reason = f"best of {len(candidates)} samples"
-    ctx.emit(f"ensemble: best score {verdict.score:.0f} ({len(candidates)} samples)")
+    ctx.event("result", f"ensemble: best score {verdict.score:.0f} ({len(candidates)} samples)", score=verdict.score, samples=len(candidates))
     return ctx.session
 
 
@@ -101,6 +101,6 @@ def _adaptive(ctx: Context, m, temp: float):
     ctx.session.final_score = verdict.score
     agree = top["count"] / n_ok if n_ok else 0.0
     ctx.session.stop_reason = f"adaptive vote: {top['count']}/{n_ok} agree ({agree:.0%})"
-    ctx.emit(f"ensemble(adaptive): {n_ok} samples, top {top['count']}/{n_ok}, "
-             f"score {verdict.score:.0f}")
+    ctx.event("result", f"ensemble(adaptive): {n_ok} samples, top {top['count']}/{n_ok}, "
+              f"score {verdict.score:.0f}", score=verdict.score, samples=n_ok)
     return ctx.session

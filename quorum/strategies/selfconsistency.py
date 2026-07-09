@@ -63,8 +63,8 @@ def run(ctx: Context):
     ctx.session.final = winner
     ctx.session.final_score = verdict.score
     ctx.session.stop_reason = f"self-consistency ({how})"
-    ctx.emit(f"self-consistency: {n_ok} samples, {len(clusters)} distinct, {how}, "
-             f"score {verdict.score:.0f}")
+    ctx.event("result", f"self-consistency: {n_ok} samples, {len(clusters)} distinct, {how}, "
+              f"score {verdict.score:.0f}", score=verdict.score, samples=n_ok)
     return ctx.session
 
 

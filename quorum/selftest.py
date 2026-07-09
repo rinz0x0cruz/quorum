@@ -256,6 +256,15 @@ def run() -> int:
                  bool(_vf.final) and {"draft", "verify", "revise"}
                  <= {t.kind for r in _vf.rounds for t in r.turns})
 
+            # --- structured events (#8): typed on_event stream ------------
+            from . import events as _events
+            _evs = []
+            orchestrator.run_session(cfg, "events q", store=store, strategy="refine",
+                                     promptsmith_on=False, on_event=_evs.append)
+            c.ok("events stream phase/round/done",
+                 {"phase", "round", "done"} <= {e.kind for e in _evs})
+            c.ok("event coerce wraps string", _events.coerce("hi").kind == "log")
+
             # --- config validation (#7): warn on unknown keys -------------
             from .config import validate_config as _vc
             c.ok("config validate clean", _vc({"run": {"max_rounds": 3}}) == [])
