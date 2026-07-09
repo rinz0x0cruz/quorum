@@ -40,3 +40,12 @@ def test_cascade_defaults_when_unset(tmp_path):
                                         promptsmith_on=False)
     assert sess.strategy == "cascade" and sess.final
     assert sess.stop_reason.startswith("cascade: refine reached target")
+
+
+def test_cascade_skips_unknown_stage(tmp_path):
+    cfg = _deep_merge(mock_cfg(str(tmp_path / "t.db")),
+                      {"run": {"cascade": ["bogus", "refine"]}})
+    with Store(cfg["output"]["db_path"]) as store:
+        sess = orchestrator.run_session(cfg, "q", store=store, strategy="cascade",
+                                        promptsmith_on=False)
+    assert sess.final and sess.stop_reason.startswith("cascade: refine reached target")

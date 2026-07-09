@@ -60,3 +60,11 @@ def test_selfconsistency_adaptive_early_stops(tmp_path):
     proposes = [t for r in sess.rounds for t in r.turns if t.kind == "propose"]
     assert len(proposes) == 2                       # identical mock samples -> stop at samples_min
     assert sess.final and sess.final_score > 0
+
+
+def test_selfconsistency_no_members_errors(tmp_path):
+    cfg = _deep_merge(mock_cfg(str(tmp_path / "t.db")), {"council": {"members": []}})
+    with Store(cfg["output"]["db_path"]) as store:
+        sess = orchestrator.run_session(cfg, "q", store=store, strategy="selfconsistency",
+                                        promptsmith_on=False)
+    assert sess.status == "error" and "no members" in sess.stop_reason

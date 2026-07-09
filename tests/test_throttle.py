@@ -122,6 +122,43 @@ def test_rate_limiter_paces_calls():
     assert second > 0.0
 
 
+def test_throttle_run_prints_report(tmp_path, capsys):
+    store = Store(str(tmp_path / "t.db"))
+    for _ in range(3):
+        store.add_api_call("openrouter", "a:free", "ok", http_code=200, latency_ms=100,
+                           rl_remaining=5)
+    store.add_api_call("openrouter", "a:free", "HTTP 429", http_code=429, retry_after=2.0)
+    cfg = {"run": {"parallel": True}, "council": {"members": [{}, {}]},
+           "providers": {"openrouter": {"base_url": "", "api_key_env": ""}}}
+    rc = throttle.run(cfg, store, probe=False)
+    out = capsys.readouterr().out
+    store.close()
+    assert rc == 0
+    assert "attempts recorded: 4" in out
+    assert "a:free" in out and "recommendations" in out
+
+
+def test_throttle_run_no_telemetry(tmp_path, capsys):
+    store = Store(str(tmp_path / "t.db"))
+    rc = throttle.run({"run": {}, "council": {"members": []}, "providers": {}}, store, probe=False)
+    out = capsys.readouterr().out
+    store.close()
+    assert rc == 0 and "no API-call telemetry" in out
+
+
+def test_key_status_missing_config_returns_none():
+    # no base_url/key configured -> None, and no network is attempted
+    assert throttle.key_status(
+        {"providers": {"openrouter": {"base_url": "", "api_key_env": ""}}}) is None
+
+
+def test_recommendations_with_free_tier_key():
+    summary = {"total": 5, "throttled": 0, "peak_rpm": {"openrouter": 3}, "by_model": {}}
+    key = {"is_free_tier": True, "usage": 0, "limit_remaining": 12}
+    recs = " ".join(throttle.recommendations(summary, {"run": {}, "council": {"members": []}}, key))
+    assert "daily" in recs and "remaining: 12" in recs
+
+
 def test_429_rotates_to_fallback_fast(tmp_path, monkeypatch):
     cfg = mock_cfg(str(tmp_path / "t.db"))
     cfg["providers"]["live"] = {"base_url": "http://example.test/v1", "api_key_env": ""}
