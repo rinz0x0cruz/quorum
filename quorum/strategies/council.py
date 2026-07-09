@@ -87,7 +87,7 @@ def run(ctx: Context):
             ctx.session.account(jturn)
             rnd.verdict = verdict
             verdicts.append(verdict)
-            ctx.emit(f"round {r}: score {verdict.score:.0f} (chairman)")
+            ctx.event("round", f"round {r}: score {verdict.score:.0f} (chairman)", round=r, score=verdict.score)
         else:
             ctx.emit(f"round {r}: (deferred judge)")
         ctx.session.rounds.append(rnd)

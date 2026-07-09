@@ -53,5 +53,5 @@ def run(ctx: Context):
     ctx.session.final = answer
     ctx.session.final_score = verdict.score
     ctx.session.stop_reason = "chain-of-verification (draft -> checks -> verify -> revise)"
-    ctx.emit(f"verify: score {verdict.score:.0f}")
+    ctx.event("result", f"verify: score {verdict.score:.0f}", score=verdict.score)
     return ctx.session

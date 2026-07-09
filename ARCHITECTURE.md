@@ -64,6 +64,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `grade.py` | Reference-based grading (numeric/deterministic or AI grader) | `numeric_match`, `extract_gold`, `grade` |
 | `scoring/` | Shared lexical text-scoring primitives + a `Scorer` protocol & registry (leaf) | `tokens`, `overlap_coeff`, `jaccard`, `LexicalScorer`, `register`/`get`/`available` |
 | `consistency.py` | Cluster sampled answers (numeric-exact / lexical) + the adaptive-consistency stopping rule (leaf) | `assign`, `leader`, `confident`, `cluster` |
+| `events.py` | Structured progress events + the `on_event` observability stream (leaf) | `Event`, `render`, `coerce` |
 
 ### Domain & data
 | Module | Responsibility | Key symbols |
@@ -258,7 +259,7 @@ shippable; none changes behavior.
 | 5 | ~~`prompts.py` is a flat grab-bag; strategy-specific builders (e.g. `challenge`) bloat it~~ | **Shipped**: a `prompts/` package split by concern -- the shared DATA/LLM01 framing helpers + generic builders (`propose`/`revise`/`self_refine`/`revise_from_draft`) in `base`, and the strategy-specific builders alongside their strategy (`debate.challenge`, `council.review`/`synthesize`, `moa.moa_layer`/`aggregate`). `__init__` re-exports every builder + SYSTEM constant, so `prompts.<name>` (and the `mock` sentinels) resolve byte-identically -- no call site changed | `prompts/`, `strategies/*` | ✅ done |
 | 6 | `provider.py` bundles routing + transport (retry/fallback/json-mode) + accounting | Split a **transport** layer from a `Provider` protocol so alternate backends (embeddings, streaming, optional litellm) register like strategies | `provider.py` | Low* |
 | 7 | ~~No config validation — a mistyped key silently no-ops~~ | **Shipped**: `config.validate_config` reports unknown key-paths and `load_config(warn=True)` prints them (open subtrees `providers.*`/`cost.pricing.*`/`judge.rubric.*` allowed); the CLI enables it. Never fatal | `config.py` | ✅ done |
-| 8 | `emit` is an ad-hoc string logger | A minimal structured **event/hook** interface for observability as flows deepen | `orchestrator.py`, `strategies/*` | Low |
+| 8 | ~~`emit` is an ad-hoc string logger~~ | **Shipped**: a leaf `events.py` (`Event` + `render`/`coerce`); `run_session(on_event=...)` streams typed events (`phase`/`round`/`result`/`member_failed`/`done`) while plain-string emits are wrapped as `log` events, so the CLI output is byte-identical and no call site broke. `ctx.event(kind, msg, **data)` is the strategy-side helper | `events.py`, `orchestrator.py`, `strategies/*` | ✅ done |
 
 \* Low unless a non-OpenAI or multi-backend provider lands on the roadmap — then #6 jumps to High.
 

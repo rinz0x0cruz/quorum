@@ -34,7 +34,7 @@ def run(ctx: Context):
             continue
         strat(ctx)
         score = ctx.session.final_score
-        ctx.emit(f"cascade stage {i}/{len(stages)} [{name}]: score {score:.0f}")
+        ctx.event("phase", f"cascade stage {i}/{len(stages)} [{name}]: score {score:.0f}", stage=i, strategy=name, score=score)
         if score > best_score:
             best_final, best_score, best_stage = ctx.session.final, score, name
         if score >= target:

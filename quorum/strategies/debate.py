@@ -44,7 +44,7 @@ def run(ctx: Context):
         candidates, cand_models = [], []
         for m, comp in zip(members, comps):
             if not comp.ok:
-                ctx.emit(f"  round {r}: {m.name} failed ({comp.error[:60]})")
+                ctx.event("member_failed", f"  round {r}: {m.name} failed ({comp.error[:60]})", round=r, member=m.name)
                 continue
             kind = "propose" if r == 1 else ("challenge" if m is devil else "revise")
             turn = provider.to_turn(comp, r, m.name, kind)
@@ -68,7 +68,7 @@ def run(ctx: Context):
             rnd.verdict = verdict
             rnd.best_content = verdict.best_content
             verdicts.append(verdict)
-            ctx.emit(f"round {r}: score {verdict.score:.0f} (best={verdict.best_label})")
+            ctx.event("round", f"round {r}: score {verdict.score:.0f} (best={verdict.best_label})", round=r, score=verdict.score, best=verdict.best_label)
         else:
             ctx.emit(f"round {r}: (deferred judge)")
         ctx.session.rounds.append(rnd)

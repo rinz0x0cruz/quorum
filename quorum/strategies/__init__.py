@@ -88,8 +88,13 @@ class Context:
     prompt: str                    # refined solve-prompt (phase 1 output)
     members: list[ModelSpec]
     session: Session
-    emit: Callable[[str], None]
+    emit: Callable[[Any], None]    # accepts a str (log line) or an events.Event
     opts: RunOptions = field(default_factory=RunOptions)  # resolved run.* knobs
+
+    def event(self, kind: str, message: str = "", *, round: int = 0, **data: Any) -> None:
+        """Emit a structured :class:`~quorum.events.Event` (also rendered to the CLI)."""
+        from ..events import Event
+        self.emit(Event(kind, message, round=round, data=data))
 
 
 def available() -> list[str]:
