@@ -72,6 +72,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "rubric": {"correctness": 0.40, "completeness": 0.25, "clarity": 0.20, "grounding": 0.15},
         "cross_family_guard": True,  # prefer a judge from a different vendor than the candidate
         "json_mode": False,          # ask the judge/grader endpoint for OpenAI JSON mode (opt-in)
+        "shuffle_candidates": True,  # randomise candidate order to curb LLM-judge position bias
     },
 
     "cost": {

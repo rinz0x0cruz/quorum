@@ -149,7 +149,7 @@ def run() -> int:
             cands = [("alice", "answer one"), ("bob", "answer two")]
             v1, jt1 = judge.evaluate(cfg, prov, 1, "task", "prompt", cands,
                                      candidate_models=["mock/alice", "anthropic/mock-bob"], store=store)
-            c.ok("judge scores round1", v1.score == 70.0 and v1.best_label == "alice")
+            c.ok("judge scores round1", v1.score == 70.0 and (v1.best_label, v1.best_content) in cands)
             c.ok("judge turn accounted", jt1.tokens_out > 0 and jt1.kind == "judge")
             c.ok("no stop below target", judge.should_stop(cfg, [v1], 1)[0] is False)
             v2, _ = judge.evaluate(cfg, prov, 2, "task", "prompt", cands,

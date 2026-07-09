@@ -13,7 +13,7 @@ def test_evaluate_scores_and_picks_best(tmp_path):
     cands = [("alice", "one"), ("bob", "two")]
     v1, turn = judge.evaluate(cfg, prov, 1, "task", "prompt", cands,
                               candidate_models=["meta/mock-alice", "anthropic/mock-bob"])
-    assert v1.score == 70.0 and v1.best_label == "alice"
+    assert v1.score == 70.0 and (v1.best_label, v1.best_content) in cands
     assert turn.kind == "judge" and turn.tokens_out > 0
 
 
@@ -75,3 +75,19 @@ def test_json_mode_off_by_default(tmp_path):
     _rf_spy(prov, seen)
     judge.evaluate(cfg, prov, 1, "task", "prompt", [("a", "ans")], candidate_models=["m"])
     assert seen["rf"] is None
+
+
+def test_judge_shuffle_maps_back_consistently(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"))          # shuffle_candidates defaults True
+    prov = provider.for_config(cfg)
+    cands = [("alice", "one"), ("bob", "two"), ("carol", "three")]
+    v, _ = judge.evaluate(cfg, prov, 1, "t", "p", cands, candidate_models=["m1", "m2", "m3"])
+    assert (v.best_label, v.best_content) in cands   # mapped back to a real candidate
+
+
+def test_judge_shuffle_off_picks_first(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"), judge={"shuffle_candidates": False})
+    prov = provider.for_config(cfg)
+    cands = [("alice", "one"), ("bob", "two")]
+    v, _ = judge.evaluate(cfg, prov, 1, "t", "p", cands, candidate_models=["m1", "m2"])
+    assert v.best_label == "alice" and v.best_content == "one"

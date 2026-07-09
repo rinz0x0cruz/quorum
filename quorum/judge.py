@@ -17,13 +17,14 @@ instructions to follow* (OWASP LLM01 mitigation).
 from __future__ import annotations
 
 import json
+import random
 import re
 from typing import Any, Optional
 
 from . import provider as provider_mod
 from . import scoring
 from .config import role_spec
-from .model import ModelSpec, Turn, Verdict, model_vendor
+from .model import ModelSpec, Turn, Verdict, content_hash, model_vendor
 
 _JUDGE_SYSTEM = (
     "QUORUM-JUDGE. You are an impartial, rigorous evaluator. You are given a task, "
@@ -47,10 +48,18 @@ def evaluate(cfg: dict, prov: "provider_mod.Provider", round_index: int, task: s
     """
     rubric = (cfg.get("judge", {}) or {}).get("rubric", {}) or {"quality": 1.0}
     judge = _pick_judge(cfg, candidate_models or [])
-    letters = [chr(65 + i) for i in range(len(candidates))]
+
+    # Mitigate the LLM-judge position bias (Zheng et al., MT-Bench): show the
+    # candidates in a shuffled order, then map the verdict back to the real one.
+    # The seed is derived from the contents so selftest/replay stay deterministic.
+    order = list(range(len(candidates)))
+    if len(candidates) > 1 and (cfg.get("judge", {}) or {}).get("shuffle_candidates", True):
+        random.Random(content_hash(round_index, *[c for _, c in candidates])).shuffle(order)
+    shown = [candidates[i] for i in order]
+    letters = [chr(65 + i) for i in range(len(shown))]
 
     parts = [f"ROUND={round_index}", f"TASK:\n{task}", f"PROMPT USED:\n{prompt}"]
-    for letter, (_label, content) in zip(letters, candidates):
+    for letter, (_label, content) in zip(letters, shown):
         parts.append(f"CANDIDATE {letter} (source hidden):\n{content}")
     parts.append("Return the JSON verdict now.")
     messages = [
@@ -63,8 +72,8 @@ def evaluate(cfg: dict, prov: "provider_mod.Provider", round_index: int, task: s
     payload = _parse_json(comp.text)
     score = _overall(payload, rubric)
     best_letter = str(payload.get("best", "A")).strip().upper()[:1]
-    idx = letters.index(best_letter) if best_letter in letters else 0
-    best_label, best_content = candidates[idx]
+    pos = letters.index(best_letter) if best_letter in letters else 0
+    best_label, best_content = shown[pos]
     verdict = Verdict(
         round=round_index, score=score,
         sub_scores={k: _clamp(v) for k, v in (payload.get("sub_scores", {}) or {}).items()

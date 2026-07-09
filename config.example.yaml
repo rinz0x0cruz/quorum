@@ -74,6 +74,7 @@ judge:
     grounding: 0.15
   cross_family_guard: true   # prefer a judge from a different vendor than the candidate
   json_mode: false           # request OpenAI JSON mode for judge/grader (only if your endpoint supports it)
+  shuffle_candidates: true   # randomise candidate order to curb LLM-judge position bias (MT-Bench)
 
 cost:
   budget_usd: 0.50           # abort a run if projected spend exceeds this (0 = no cap)
