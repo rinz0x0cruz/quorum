@@ -122,6 +122,22 @@ def _after(text: str, marker: str) -> str:
     return text[i + len(marker):] if i >= 0 else ""
 
 
+def _rl_from_headers(headers: Any) -> tuple[int, int, str]:
+    """Parse ``X-RateLimit-*`` headers (present on OpenRouter/OpenAI responses)."""
+    if not headers:
+        return 0, 0, ""
+
+    def _int(name: str) -> int:
+        v = headers.get(name)
+        try:
+            return int(float(v)) if v not in (None, "") else 0
+        except (ValueError, TypeError):
+            return 0
+
+    return (_int("X-RateLimit-Limit"), _int("X-RateLimit-Remaining"),
+            str(headers.get("X-RateLimit-Reset") or ""))
+
+
 # --------------------------------------------------------------------------
 # provider
 # --------------------------------------------------------------------------
@@ -129,12 +145,13 @@ class Provider:
     """Routes a :class:`ModelSpec` + messages to the right endpoint or the mock."""
 
     def __init__(self, cfg: dict, *, mock: Optional[MockResponder] = None, timeout: int = 60,
-                 max_retries: int = 3, backoff: float = 2.5):
+                 max_retries: int = 3, backoff: float = 2.5, telemetry: Any = None):
         self.cfg = cfg
         self.mock = mock or MockResponder()
         self.timeout = timeout
         self.max_retries = max_retries      # retries on 429/5xx (free tiers throttle)
         self.backoff = backoff              # initial backoff seconds (doubles each retry)
+        self.telemetry = telemetry          # Store-like sink for per-attempt throttle logs
 
     # -- single call ------------------------------------------------------
     def complete(self, spec: ModelSpec, messages: list[dict[str, str]], *,
@@ -189,6 +206,23 @@ class Provider:
             latency_ms=int((time.time() - t0) * 1000),
         )
 
+    def _record(self, spec: ModelSpec, status: str, *, http_code: int = 0, attempt: int = 0,
+                a0: float = 0.0, headers: Any = None, retry_after: float = 0.0,
+                tokens_in: int = 0, tokens_out: int = 0) -> None:
+        """Best-effort telemetry: log one HTTP attempt for throttle analysis."""
+        tel = self.telemetry
+        if tel is None or not hasattr(tel, "add_api_call"):
+            return
+        rl_lim, rl_rem, rl_reset = _rl_from_headers(headers)
+        latency = int((time.time() - a0) * 1000) if a0 else 0
+        try:
+            tel.add_api_call(spec.provider, spec.model, status, http_code=http_code,
+                             attempt=attempt, latency_ms=latency, retry_after=retry_after,
+                             rl_limit=rl_lim, rl_remaining=rl_rem, rl_reset=rl_reset,
+                             tokens_in=tokens_in, tokens_out=tokens_out)
+        except Exception:  # noqa: BLE001 - telemetry must never break a run
+            pass
+
     def _http(self, spec: ModelSpec, messages: list[dict[str, str]],
               temperature: float, max_tokens: int, t0: float,
               response_format: Optional[dict] = None) -> Completion:
@@ -216,10 +250,12 @@ class Provider:
 
         delay, last_err = self.backoff, ""
         for attempt in range(self.max_retries + 1):
+            a0 = time.time()
             req = urllib.request.Request(base + "/chat/completions", data=payload,
                                          headers=headers, method="POST")
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - configured endpoint
+                    resp_headers = getattr(resp, "headers", None)
                     data = json.loads(resp.read().decode("utf-8"))
                 text = data["choices"][0]["message"]["content"].strip()
                 usage = data.get("usage", {}) or {}
@@ -228,18 +264,26 @@ class Provider:
                 if usage.get("prompt_tokens"):
                     comp.tokens_in = int(usage["prompt_tokens"])
                     comp.cost_usd = cost.price(self.cfg, spec.model, comp.tokens_in, comp.tokens_out)
+                self._record(spec, "ok", http_code=200, attempt=attempt, a0=a0,
+                             headers=resp_headers, tokens_in=comp.tokens_in,
+                             tokens_out=comp.tokens_out)
                 return comp
             except urllib.error.HTTPError as e:
                 last_err = f"HTTP {e.code}"
+                ra = e.headers.get("Retry-After") if e.headers else None
+                ra_s = float(ra) if (ra and str(ra).replace(".", "", 1).isdigit()) else 0.0
+                self._record(spec, last_err, http_code=e.code, attempt=attempt, a0=a0,
+                             headers=e.headers, retry_after=ra_s)
                 if e.code in (429, 500, 502, 503, 504) and attempt < self.max_retries:
-                    ra = e.headers.get("Retry-After") if e.headers else None
-                    time.sleep(min(float(ra) if (ra and str(ra).isdigit()) else delay, 15))
+                    time.sleep(min(ra_s or delay, 15))
                     delay *= 2
                     continue
                 return Completion("", spec.model, spec.provider, ok=False,
                                   error=last_err, latency_ms=int((time.time() - t0) * 1000))
             except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
                 last_err = str(e)
+                status = "timeout" if isinstance(e, TimeoutError) else "error"
+                self._record(spec, status, http_code=0, attempt=attempt, a0=a0)
                 if attempt < self.max_retries:
                     time.sleep(delay)
                     delay *= 2
@@ -272,8 +316,8 @@ class Provider:
         return [r for r in results if r is not None]
 
 
-def for_config(cfg: dict, *, mock: Optional[MockResponder] = None) -> Provider:
-    return Provider(cfg, mock=mock)
+def for_config(cfg: dict, *, mock: Optional[MockResponder] = None, store: Any = None) -> Provider:
+    return Provider(cfg, mock=mock, telemetry=store)
 
 
 def to_turn(comp: Completion, round_index: int, member: str, kind: str) -> Turn:

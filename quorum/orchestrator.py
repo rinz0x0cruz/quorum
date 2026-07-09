@@ -32,7 +32,7 @@ def run_session(cfg: dict, task: str, *, store: Any = None, strategy: Optional[s
         run["target_score"] = target
     strat_name = run.get("strategy", "refine")
 
-    prov = prov or provider_mod.for_config(cfg)
+    prov = prov or provider_mod.for_config(cfg, store=store)
     members = member_specs(cfg)
     log = emit or ((lambda s: print("  " + s)) if verbose else (lambda s: None))
     session = Session(id=session_id(task, strat_name), task=task, strategy=strat_name)

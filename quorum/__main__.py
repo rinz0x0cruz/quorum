@@ -11,6 +11,7 @@ Usage:
     python -m quorum serve [--open]               Serve the dashboard locally
     python -m quorum export [--format json|csv|md] [--session id]
     python -m quorum models [--ping]              List council members (and check reachability)
+    python -m quorum throttle                     Analyze API rate-limit/throttle telemetry
     python -m quorum selftest                     Offline self-tests (no network)
 
 Live deliberation talks to the OpenAI-compatible endpoints you configure; the
@@ -155,6 +156,12 @@ def cmd_models(args, cfg):
     return provider.list_models(cfg, ping=args.ping)
 
 
+def cmd_throttle(args, cfg):
+    from . import throttle
+    with _store(cfg) as store:
+        return throttle.run(cfg, store, provider=args.provider, probe=not args.no_probe)
+
+
 def cmd_selftest(args, cfg):
     from . import selftest
     return selftest.run()
@@ -239,6 +246,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("models", help="List council members")
     sp.add_argument("--ping", action="store_true", help="Check each endpoint is reachable")
     sp.set_defaults(func=cmd_models)
+
+    sp = sub.add_parser("throttle", help="Analyze recorded API rate-limit/throttle telemetry")
+    sp.add_argument("--provider", default="openrouter",
+                    help="Provider whose key quota to probe (default: openrouter)")
+    sp.add_argument("--no-probe", action="store_true",
+                    help="Skip the live key/quota probe (offline: telemetry only)")
+    sp.set_defaults(func=cmd_throttle)
 
     sub.add_parser("selftest", help="Offline self-tests").set_defaults(func=cmd_selftest)
     return p

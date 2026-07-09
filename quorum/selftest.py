@@ -346,5 +346,24 @@ def run() -> int:
             _hooks.clear()
             c.ok("pre/post hooks fire", _hf == {"pre": 1, "post": 1})
 
+            # --- throttle telemetry + analyzer ----------------------------
+            from . import throttle
+            store.add_api_call("openrouter", "m:free", "ok", http_code=200,
+                               latency_ms=50, rl_remaining=8)
+            store.add_api_call("openrouter", "m:free", "HTTP 429", http_code=429,
+                               retry_after=2.0, rl_remaining=0)
+            c.ok("api_calls recorded", len(store.api_calls_recent()) >= 2)
+            _tsum = throttle.summarize([
+                {"ts": "2026-07-10T10:00:01Z", "provider": "openrouter", "model": "m:free",
+                 "status": "ok", "http_code": 200, "latency_ms": 50, "rl_remaining": 8},
+                {"ts": "2026-07-10T10:00:01Z", "provider": "openrouter", "model": "m:free",
+                 "status": "HTTP 429", "http_code": 429, "latency_ms": 0, "rl_remaining": 0}])
+            c.ok("throttle summarize counts 429",
+                 _tsum["throttled"] == 1 and _tsum["by_model"]["m:free"]["total"] == 2)
+            c.ok("throttle flags free ceiling",
+                 any("rate_limit_rpm" in r for r in throttle.recommendations(
+                     {"total": 1, "throttled": 1, "peak_rpm": {"openrouter": 20}, "by_model": {}},
+                     cfg, None)))
+
     print(f"\n  {c.passed} passed, {c.failed} failed")
     return 0 if c.failed == 0 else 1
