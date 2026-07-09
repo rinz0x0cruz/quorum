@@ -245,6 +245,12 @@ def run() -> int:
             c.ok("selfconsistency reaches consensus",
                  bool(_sc.final) and "self-consistency" in _sc.stop_reason and _sc.final_score > 0)
 
+            # --- config validation (#7): warn on unknown keys -------------
+            from .config import validate_config as _vc
+            c.ok("config validate clean", _vc({"run": {"max_rounds": 3}}) == [])
+            c.ok("config validate flags typo", "run.max_round" in _vc({"run": {"max_round": 3}}))
+            c.ok("config validate self-clean", _vc(_deep_merge(DEFAULT_CONFIG, {})) == [])
+
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
                 _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),

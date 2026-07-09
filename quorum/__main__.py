@@ -262,7 +262,7 @@ def main(argv=None) -> int:
     _force_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, warn=True)
     if args.db:
         cfg["output"]["db_path"] = args.db
     return args.func(args, cfg)
