@@ -207,6 +207,14 @@ def run() -> int:
                  all(r.index != 0 for r in orchestrator.run_session(
                      cfg, "skip ps", store=store, strategy="refine", promptsmith_on=False).rounds))
 
+            # --- cascade (difficulty-adaptive escalation; FrugalGPT) ------
+            c.ok("cascade registered", "cascade" in strategies.available())
+            _casc = orchestrator.run_session(
+                _deep_merge(cfg, {"run": {"cascade": ["refine", "debate"]}}),
+                "cascade task", store=store, strategy="cascade", promptsmith_on=False)
+            c.ok("cascade stops at cheap stage",
+                 _casc.stop_reason.startswith("cascade: refine reached target") and bool(_casc.final))
+
             # --- top-K fuse + devil's advocate ----------------------------
             tk = orchestrator.run_session(
                 _deep_merge(cfg, {"run": {"top_k": 2, "max_rounds": 1}}),

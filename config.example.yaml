@@ -52,6 +52,9 @@ run:
   fallbacks: []
   top_k: 0                 # if >0, rank candidates and fuse only the top-K (council/moa)
   devils_advocate: false   # debate: make one member argue the counter-case from round 2 on
+  # strategy: cascade runs these stages cheapest-first, stopping at the first that
+  # reaches target_score -- so easy tasks cost ~2-3 calls and only hard ones escalate.
+  cascade: []              # e.g. [refine, debate, council]  (empty -> that default)
 
 # Phase 1: design + refine the solve-prompt before the council answers.
 promptsmith:

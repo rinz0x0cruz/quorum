@@ -57,6 +57,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "fallbacks": [],            # default alternates ("provider:model") tried when a call fails (e.g. 429)
         "top_k": 0,                 # if >0, fuse only the top-K peer-ranked candidates (council/moa)
         "devils_advocate": False,   # debate: have one member argue the counter-case from round 2 on
+        "cascade": [],              # strategy=cascade: ordered stages, cheapest first (default [refine,debate,council])
     },
 
     # Phase 1: design + refine the solve-prompt before the council answers.

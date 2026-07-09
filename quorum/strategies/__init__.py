@@ -19,6 +19,7 @@ _BUILTIN = {
     "moa": "quorum.strategies.moa",
     "refine": "quorum.strategies.refine",
     "ensemble": "quorum.strategies.ensemble",
+    "cascade": "quorum.strategies.cascade",
 }
 
 
@@ -45,6 +46,7 @@ class RunOptions:
     parallel: bool = True
     top_k: int = 0
     devils_advocate: bool = False
+    cascade: list = field(default_factory=list)  # ordered strategies for the cascade escalation
 
     @classmethod
     def from_cfg(cls, cfg: dict) -> "RunOptions":
@@ -64,6 +66,7 @@ class RunOptions:
             parallel=bool(r.get("parallel", True)),
             top_k=int(r.get("top_k", 0) or 0),
             devils_advocate=bool(r.get("devils_advocate", False)),
+            cascade=list(r.get("cascade", []) or []),
         )
 
 
