@@ -20,3 +20,9 @@ dist/
 venv/
 .pytest_cache/
 .ruff_cache/
+
+# coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
