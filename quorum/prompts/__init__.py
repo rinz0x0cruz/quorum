@@ -45,6 +45,12 @@ from .selfdiscover import (
     discover,
     discover_solve,
 )
+from .stepback import (
+    STEPBACK_ABSTRACT_SYSTEM,
+    STEPBACK_SOLVE_SYSTEM,
+    step_back,
+    step_back_solve,
+)
 
 __all__ = [
     # system prompts (mock provider keys off the QUORUM-* sentinels)
@@ -64,6 +70,8 @@ __all__ = [
     "VERIFY_REVISE_SYSTEM",
     "SELFDISCOVER_PLAN_SYSTEM",
     "SELFDISCOVER_SOLVE_SYSTEM",
+    "STEPBACK_ABSTRACT_SYSTEM",
+    "STEPBACK_SOLVE_SYSTEM",
     # message builders
     "propose",
     "revise",
@@ -82,4 +90,6 @@ __all__ = [
     "verified_final",
     "discover",
     "discover_solve",
+    "step_back",
+    "step_back_solve",
 ]
