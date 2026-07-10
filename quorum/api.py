@@ -11,7 +11,7 @@ Host config -- add a ``quorum:`` block to the tool's existing ``config.yaml``::
 
     quorum:
       enabled: true            # off by default -> AI stays optional
-      strategy: refine         # refine | debate | council | moa | ensemble
+      strategy: refine         # refine | debate | council | moa | ensemble | cascade | selfconsistency | selfmoa | reflexion | verify
       max_rounds: 2
       # Optional extra council members; if omitted, the tool's single `ai.model`
       # is used (so even one model gains self-refine):
