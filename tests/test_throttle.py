@@ -185,6 +185,37 @@ def test_key_status_missing_config_returns_none():
         {"providers": {"openrouter": {"base_url": "", "api_key_env": ""}}}) is None
 
 
+def test_recommendations_no_ceiling_for_non_openrouter():
+    # Groq is not OpenRouter -> the 20/min free ceiling must not be applied to it.
+    cfg = {"run": {"parallel": False}, "council": {"members": [{}]},
+           "providers": {"groq": {"base_url": "https://api.groq.com/openai/v1", "api_key_env": ""}}}
+    summary = {"total": 40, "throttled": 0, "peak_rpm": {"groq": 25}, "by_model": {}}
+    recs = " ".join(throttle.recommendations(summary, cfg, None))
+    assert "free ceiling" not in recs and "rate_limit_rpm" not in recs
+
+
+def test_key_status_unsupported_for_non_openrouter(monkeypatch):
+    # /key is OpenRouter-specific -> non-OpenRouter providers short-circuit, no network.
+    monkeypatch.setenv("GROQ_TEST_KEY", "k")
+    cfg = {"providers": {"groq": {"base_url": "https://api.groq.com/openai/v1",
+                                  "api_key_env": "GROQ_TEST_KEY"}}}
+    assert throttle.key_status(cfg, "groq") == {"unsupported": "groq"}
+
+
+def test_throttle_run_non_openrouter_skips_probe_and_ceiling(tmp_path, capsys):
+    store = Store(str(tmp_path / "t.db"))
+    for _ in range(3):
+        store.add_api_call("groq", "llama-3.3-70b-versatile", "ok", http_code=200, latency_ms=100)
+    cfg = {"run": {}, "council": {"members": [{}]},
+           "providers": {"groq": {"base_url": "https://api.groq.com/openai/v1", "api_key_env": ""}}}
+    rc = throttle.run(cfg, store, provider="groq")   # probe defaults True -> must be gated off
+    out = capsys.readouterr().out
+    store.close()
+    assert rc == 0
+    assert "OpenRouter free limit" not in out        # no OpenRouter ceiling label for groq
+    assert "quota probe failed" not in out           # probe skipped -> no 404
+
+
 def test_recommendations_with_free_tier_key():
     summary = {"total": 5, "throttled": 0, "peak_rpm": {"openrouter": 3}, "by_model": {}}
     key = {"is_free_tier": True, "usage": 0, "limit_remaining": 12}
