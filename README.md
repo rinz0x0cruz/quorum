@@ -140,7 +140,7 @@ Give a task a gold `answer` and a `match` type, and `bench` scores every strateg
 quorum bench --tasks reasoning --strategies refine,selfconsistency,verify,selfmoa,cascade
 ```
 
-`--tasks reasoning` resolves to the shipped [`evals/reasoning.yaml`](evals/reasoning.yaml) (a small arithmetic / multiple-choice / yes-no / short-answer set). `match` is one of:
+`--tasks reasoning` resolves to the shipped [`evals/reasoning.yaml`](evals/reasoning.yaml) (a small arithmetic / multiple-choice / yes-no / short-answer set); a harder companion set lives at [`evals/reasoning-hard.yaml`](evals/reasoning-hard.yaml) (`--tasks reasoning-hard` — System-1 traps + multi-step problems that separate strategies on accuracy, not just cost). `match` is one of:
 
 | `match` | grades by | example gold |
 |---|---|---|

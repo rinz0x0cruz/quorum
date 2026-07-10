@@ -1,0 +1,82 @@
+# quorum HARD reasoning eval -- traps + multi-step problems that a single shot
+# tends to fumble, so the reasoning strategies can actually pull ahead of a cheap
+# baseline on *accuracy* (not just cost). Still 100% deterministically gradable.
+#
+#   quorum bench --tasks reasoning-hard --strategies refine,verify,selfdiscover,leasttomost
+#
+# See evals/reasoning.yaml for the easy set and the `match` type reference.
+
+tasks:
+  # --- System-1 traps (the "obvious" answer is wrong) -----------------------
+  - id: bat-ball
+    task: >-
+      A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the
+      ball. How much does the ball cost, in cents? End with "Answer: <number>".
+    answer: "#### 5"
+
+  - id: widget-machines
+    task: >-
+      If 3 machines make 3 widgets in 3 minutes, how many minutes does it take
+      100 machines to make 100 widgets? End with "Answer: <number>".
+    answer: "#### 3"
+
+  - id: pct-roundtrip
+    task: >-
+      A price first rises by 25%, then falls by 20% from the increased price.
+      What is the net percentage change from the original price? (Use 0 if
+      unchanged.) End with "Answer: <number>".
+    answer: "#### 0"
+
+  # --- multi-step arithmetic with a remainder -------------------------------
+  - id: apples-remainder
+    task: >-
+      A store starts with 350 apples. It sells 3/7 of them on Monday, then sells
+      40% of the remaining apples on Tuesday. How many apples are left after
+      Tuesday? End with "Answer: <number>".
+    answer: "#### 120"
+
+  - id: train-rate
+    task: >-
+      A train travels 60 km in 45 minutes at a constant speed. At that same
+      speed, how many kilometres does it travel in 2 hours? End with
+      "Answer: <number>".
+    answer: "#### 160"
+
+  - id: number-sequence
+    task: >-
+      What is the next number in the sequence 2, 6, 12, 20, 30, ? End with
+      "Answer: <number>".
+    answer: "#### 42"
+
+  # --- multi-hop logic ------------------------------------------------------
+  - id: height-order
+    task: >-
+      Alice is taller than Bob. Bob is taller than Carol. Dave is shorter than
+      Carol. Who is the tallest?
+      A) Bob  B) Alice  C) Carol  D) Dave
+      End with "Answer: <letter>".
+    answer: "B"
+    match: choice
+
+  - id: leap-1900
+    task: >-
+      A year is a leap year if it is divisible by 4, except for century years,
+      which must be divisible by 400. Was the year 1900 a leap year? Answer yes
+      or no. End with "Answer: <yes/no>".
+    answer: "no"
+    match: boolean
+
+  # --- relative day-of-week + multi-hop fact --------------------------------
+  - id: days-ago
+    task: >-
+      If today is Wednesday, what day of the week was it exactly 100 days ago?
+      Give the day as a single word. End with "Answer: <day>".
+    answer: "Monday"
+    match: exact
+
+  - id: yen-capital
+    task: >-
+      Name, in a single word, the capital city of the country whose official
+      currency is the yen. End with "Answer: <word>".
+    answer: "Tokyo"
+    match: exact
