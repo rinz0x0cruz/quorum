@@ -54,6 +54,29 @@ def test_recommendations_quiet_when_clean():
     assert any("No throttling" in r for r in recs)
 
 
+def test_dashboard_throttle_panel(tmp_path):
+    from quorum import render
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    with Store(cfg["output"]["db_path"]) as store:
+        store.add_api_call("openrouter", "m:free", "ok", http_code=200, latency_ms=100, rl_remaining=5)
+        store.add_api_call("openrouter", "m:free", "HTTP 429", http_code=429)
+        path = render.build(cfg, store)
+    with open(path, encoding="utf-8") as fh:
+        page = fh.read()
+    assert '"throttle"' in page and '"by_model"' in page      # payload carries the summary
+    assert "m:free" in page and "renderThrottle" in page       # model + panel renderer present
+
+
+def test_dashboard_no_throttle_without_telemetry(tmp_path):
+    from quorum import render
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    with Store(cfg["output"]["db_path"]) as store:
+        path = render.build(cfg, store)
+    with open(path, encoding="utf-8") as fh:
+        page = fh.read()
+    assert '"throttle": null' in page                          # no telemetry -> panel stays hidden
+
+
 class _Resp:
     headers = {"X-RateLimit-Limit": "20", "X-RateLimit-Remaining": "7", "X-RateLimit-Reset": "123"}
 

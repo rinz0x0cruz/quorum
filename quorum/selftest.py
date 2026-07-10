@@ -435,6 +435,9 @@ def run() -> int:
                  any("rate_limit_rpm" in r for r in throttle.recommendations(
                      {"total": 1, "throttled": 1, "peak_rpm": {"openrouter": 20}, "by_model": {}},
                      cfg, None)))
+            with open(render.build(cfg, store), encoding="utf-8") as _tfh:
+                _thtml = _tfh.read()
+            c.ok("dashboard renders throttle panel", '"by_model"' in _thtml and "m:free" in _thtml)
 
             # --- rate limiter (paces HTTP bursts under a per-minute cap) ---
             from .provider import RateLimiter as _RL

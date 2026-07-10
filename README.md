@@ -104,7 +104,7 @@ See what's actually throttling you — per-model 429 rate, peak requests/min vs 
 quorum throttle
 ```
 
-It reads per-attempt telemetry recorded during live runs (status, latency, `Retry-After`, `X-RateLimit-*`) and probes your key's remaining quota.
+It reads per-attempt telemetry recorded during live runs (status, latency, `Retry-After`, `X-RateLimit-*`) and probes your key's remaining quota. The offline dashboard (`quorum dashboard`) also shows an **api throttle** panel with the same per-model 429 rate and peak requests/min.
 
 ## Which strategy is best? Benchmark it.
 

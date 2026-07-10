@@ -13,6 +13,7 @@ import os
 from typing import Any
 
 from . import bench as bench_mod
+from . import throttle as throttle_mod
 from .store import Store, now_iso
 
 
@@ -31,12 +32,23 @@ def build(cfg: dict, store: Store) -> str:
         "generated": now_iso(),
         "sessions": [_slim(s) for s in sessions],
         "bench": summary,
+        "throttle": _throttle(store),
     }
     path = cfg["output"]["dashboard_path"]
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(_render(payload))
     return path
+
+
+def _throttle(store: Store) -> Any:
+    """A throttle summary for the dashboard panel, or None when no telemetry yet."""
+    rows = store.api_calls_recent(5000) if hasattr(store, "api_calls_recent") else []
+    if not rows:
+        return None
+    summary = throttle_mod.summarize(rows)
+    summary["free_rpm"] = throttle_mod.FREE_RPM
+    return summary
 
 
 def _slim(s: dict[str, Any]) -> dict[str, Any]:
@@ -99,6 +111,7 @@ tr:last-child td{border-bottom:0}.win{color:var(--ok);font-weight:700}
 </style></head><body><div class="wrap">
 <header><h1><b>quorum</b> deliberations</h1><span class="sub" id="gen"></span></header>
 <div id="benchWrap"><h2>strategy comparison</h2><div id="bench"></div></div>
+<div id="throttleWrap" style="display:none"><h2>api throttle</h2><div id="throttle"></div></div>
 <h2>recent sessions</h2><div id="sessions"></div>
 <p class="muted" style="margin-top:40px">Generated offline. Your data stays on this machine.</p>
 </div>
@@ -123,6 +136,28 @@ function renderBench(){
 }
 
 function scoreColor(s){return s>=85?'var(--ok)':s>=70?'var(--warn)':'var(--crit)';}
+
+function renderThrottle(){
+  const t=D.throttle; if(!t||!t.total){return;}
+  document.getElementById('throttleWrap').style.display='';
+  const host=document.getElementById('throttle');
+  const peak=Math.max(0,...Object.values(t.peak_rpm||{}));
+  const sum=el('div','muted mono'); sum.style.margin='0 0 8px';
+  sum.textContent=`${t.total} attempts · ${t.throttled} × 429 · peak ${peak}/min (free limit ${t.free_rpm})`;
+  host.appendChild(sum);
+  const barWrap=el('div'); barWrap.style.cssText='height:6px;background:#101015;border:1px solid var(--bd);border-radius:4px;margin:0 0 12px;overflow:hidden';
+  const bar=el('div','bar'); bar.style.width=Math.min(100,peak/(t.free_rpm||20)*100)+'%';
+  if(peak>=t.free_rpm)bar.style.background='var(--crit)';
+  barWrap.appendChild(bar); host.appendChild(barWrap);
+  const cols=[['model','model'],['total','reqs'],['ok','ok'],['throttled','429'],['rate_429','429%'],['avg_latency_ms','lat ms']];
+  const tbl=el('table'), thead=el('tr'); cols.forEach(c=>thead.appendChild(el('th',null,c[1]))); tbl.appendChild(thead);
+  Object.entries(t.by_model).sort((a,b)=>b[1].total-a[1].total).forEach(([model,s])=>{
+    const tr=el('tr');
+    const cells=[model,s.total,s.ok,s.throttled,(s.rate_429*100).toFixed(0)+'%',s.avg_latency_ms];
+    cells.forEach((v,i)=>{const td=el('td',null,String(v)); if(i===3&&s.throttled>0)td.style.color='var(--crit)'; tr.appendChild(td);});
+    tbl.appendChild(tr);});
+  host.appendChild(tbl);
+}
 
 function renderSessions(){
   const host=document.getElementById('sessions');
@@ -158,6 +193,6 @@ function renderSessions(){
     host.appendChild(card);
   });
 }
-renderBench(); renderSessions();
+renderBench(); renderThrottle(); renderSessions();
 </script></body></html>
 """
