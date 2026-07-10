@@ -26,6 +26,7 @@ _BUILTIN = {
     "cascade": "quorum.strategies.cascade",
     "selfdiscover": "quorum.strategies.selfdiscover",
     "stepback": "quorum.strategies.stepback",
+    "leasttomost": "quorum.strategies.leasttomost",
 }
 
 

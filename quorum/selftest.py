@@ -277,6 +277,14 @@ def run() -> int:
                  bool(_sb.final) and "step-back" in _sb.stop_reason
                  and {"abstract", "solve"} <= {t.kind for r in _sb.rounds for t in r.turns})
 
+            # --- Least-to-Most (decompose -> solve sub-questions in order) -
+            _lm = orchestrator.run_session(cfg, "leasttomost q", store=store, strategy="leasttomost",
+                                           promptsmith_on=False)
+            c.ok("leasttomost decomposes + solves",
+                 bool(_lm.final) and "least-to-most" in _lm.stop_reason
+                 and {"decompose", "solve"} <= {t.kind for r in _lm.rounds for t in r.turns}
+                 and [t.kind for r in _lm.rounds for t in r.turns].count("solve") >= 2)
+
             # --- structured events (#8): typed on_event stream ------------
             from . import events as _events
             _evs = []

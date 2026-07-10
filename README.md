@@ -28,6 +28,7 @@ Multiple-model collaboration is well studied, and `quorum` bakes the lessons in 
 | Self-MoA (is mixing worth it?) | Li et al. 2025 ([2502.00674](https://arxiv.org/abs/2502.00674)) | `selfmoa` strategy — sample the single best model + aggregate; `bench` it vs `moa`/`council` |
 | Self-Discover | Zhou et al. 2024 ([2402.03620](https://arxiv.org/abs/2402.03620)) | `selfdiscover` strategy — compose a task-specific reasoning structure, then solve it (cheap: ~2 calls) |
 | Step-Back prompting | Zheng et al. 2023 ([2310.06117](https://arxiv.org/abs/2310.06117)) | `stepback` strategy — abstract to the governing principle first, then solve (cheap: ~2 calls) |
+| Least-to-Most | Zhou et al. 2022 ([2205.10625](https://arxiv.org/abs/2205.10625)) | `leasttomost` strategy — decompose into ordered sub-questions, then solve them in sequence |
 | Adaptive-Consistency | Aggarwal et al. EMNLP'23 ([2305.11860](https://arxiv.org/abs/2305.11860)) | `run.adaptive_samples` — sample until a confident majority, then stop |
 | LLM cascade (FrugalGPT) | Chen, Zaharia & Zou 2023 ([2305.05176](https://arxiv.org/abs/2305.05176)) | `cascade` strategy — cheap first, escalate only if the judge isn't satisfied |
 | LLM-as-judge biases | Zheng et al. NeurIPS'23 ([2306.05685](https://arxiv.org/abs/2306.05685)) | judge **shuffles candidate order** to curb position bias |
@@ -89,6 +90,7 @@ quorum --config config.mock.yaml run "anything" --strategy debate
 | `cascade` | Run strategies cheapest-first (`refine`→`debate`→`council`) and stop at the first to clear the target — spends more **only on hard tasks**. | adaptive |
 | `selfdiscover` | **Compose a reasoning structure**: select + adapt atomic reasoning modules into a task-specific plan, then follow it to solve. Structured reasoning in ~2 single-model calls. | low |
 | `stepback` | **Step back to a principle**: first derive the general concept/rule behind the task, then reason from it to the answer. Curbs slips in ~2 calls. | low |
+| `leasttomost` | **Decompose then chain**: break the task into ordered sub-questions and solve them in sequence, each answer feeding the next. Strong on compositional problems; solve calls capped. | medium |
 
 **Default: `refine`** — in a GSM8K reference eval it matched `debate`'s accuracy at roughly a third of the cost/latency, echoing the "Should we be going MAD?" finding that debate isn't always worth it. Switch to `debate`/`council`/`moa` for hard or contested prompts via `run.strategy` in `config.yaml` or `--strategy`.
 
@@ -283,7 +285,7 @@ Run a local server that deliberates per request and answers in the OpenAI shape:
 ```powershell
 quorum serve --api --port 8802            # add --token <secret> to require auth; --host 0.0.0.0 to expose
 ```
-Point any OpenAI client's `base_url` at `http://127.0.0.1:8802/v1` and pass a strategy name as the `model` (`refine`, `debate`, `council`, `moa`, `ensemble`, `selfconsistency`, `selfmoa`, `reflexion`, `verify`, `cascade`, `selfdiscover`, `stepback`). With `stream: true` the response is server-sent events — **live progress** (round scores, stop reason) as SSE comments during the deliberation, then the final answer as an OpenAI `chat.completion.chunk`. A per-request `--timeout` is supported.
+Point any OpenAI client's `base_url` at `http://127.0.0.1:8802/v1` and pass a strategy name as the `model` (`refine`, `debate`, `council`, `moa`, `ensemble`, `selfconsistency`, `selfmoa`, `reflexion`, `verify`, `cascade`, `selfdiscover`, `stepback`, `leasttomost`). With `stream: true` the response is server-sent events — **live progress** (round scores, stop reason) as SSE comments during the deliberation, then the final answer as an OpenAI `chat.completion.chunk`. A per-request `--timeout` is supported.
 
 **Docker** (zero local Python):
 ```bash
