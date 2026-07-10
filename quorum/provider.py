@@ -77,6 +77,10 @@ class MockResponder:
             return self._sd_plan(user)
         if "QUORUM-SELFDISCOVER-SOLVE" in system:
             return self._sd_solve(spec, user)
+        if "QUORUM-STEPBACK-ABSTRACT" in system:
+            return self._sb_abstract(user)
+        if "QUORUM-STEPBACK-SOLVE" in system:
+            return self._sb_solve(spec, user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -126,6 +130,13 @@ class MockResponder:
 
     def _sd_solve(self, spec: ModelSpec, user: str) -> str:
         return f"[{spec.model}] Final answer produced by following the composed reasoning structure."
+
+    def _sb_abstract(self, user: str) -> str:
+        return ("Step-back question: what general principle governs this? "
+                "Principle: apply the relevant definition/rule, then reason to the specifics.")
+
+    def _sb_solve(self, spec: ModelSpec, user: str) -> str:
+        return f"[{spec.model}] Final answer reasoned from the general principle."
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

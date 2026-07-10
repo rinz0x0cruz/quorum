@@ -270,6 +270,13 @@ def run() -> int:
                  bool(_sd.final) and "self-discover" in _sd.stop_reason
                  and {"plan", "solve"} <= {t.kind for r in _sd.rounds for t in r.turns})
 
+            # --- Step-Back (abstract to a principle -> solve) ------------
+            _sb = orchestrator.run_session(cfg, "stepback q", store=store, strategy="stepback",
+                                           promptsmith_on=False)
+            c.ok("stepback abstracts + solves",
+                 bool(_sb.final) and "step-back" in _sb.stop_reason
+                 and {"abstract", "solve"} <= {t.kind for r in _sb.rounds for t in r.turns})
+
             # --- structured events (#8): typed on_event stream ------------
             from . import events as _events
             _evs = []

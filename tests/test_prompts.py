@@ -26,6 +26,8 @@ EXPECTED_SYSTEMS = [
     "VERIFY_REVISE_SYSTEM",
     "SELFDISCOVER_PLAN_SYSTEM",
     "SELFDISCOVER_SOLVE_SYSTEM",
+    "STEPBACK_ABSTRACT_SYSTEM",
+    "STEPBACK_SOLVE_SYSTEM",
 ]
 
 EXPECTED_BUILDERS = [
@@ -46,6 +48,8 @@ EXPECTED_BUILDERS = [
     "verified_final",
     "discover",
     "discover_solve",
+    "step_back",
+    "step_back_solve",
 ]
 
 
