@@ -61,7 +61,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `promptsmith.py` | Phase-1 OPRO prompt refinement + few-shot bootstrap | `refine`, `_exemplars` |
 | `rank.py` | Rank candidates from peer reviews (Borda over reviewer orderings) | `consensus_order`, `top_k_indices` |
 | `contextwindow.py` | Pack caller history + grounding docs into a DATA-framed preamble | `ContextDoc`, `pack`, `select`, `preamble` |
-| `grade.py` | Reference-based grading (numeric/deterministic or AI grader) | `numeric_match`, `extract_gold`, `grade` |
+| `grade.py` | Reference grading: deterministic (numeric/choice/boolean/exact/contains/regex, no model) or AI grader fallback | `deterministic_match`, `numeric_match`, `final_answer`, `grade` |
 | `scoring/` | Shared lexical text-scoring primitives + a `Scorer` protocol & registry (leaf) | `tokens`, `overlap_coeff`, `jaccard`, `LexicalScorer`, `register`/`get`/`available` |
 | `consistency.py` | Cluster sampled answers (numeric-exact / lexical) + the adaptive-consistency stopping rule (leaf) | `assign`, `leader`, `confident`, `cluster` |
 | `events.py` | Structured progress events + the `on_event` observability stream (leaf) | `Event`, `render`, `coerce` |

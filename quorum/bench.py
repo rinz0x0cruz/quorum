@@ -53,7 +53,8 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
             match_score, correct, g_cost, g_tokens = None, None, 0.0, 0
             if task.get("reference") and not errored:
                 match_score, correct, gturn = grade.grade(
-                    cfg, prov, task["task"], sess.final, task["reference"], store=store)
+                    cfg, prov, task["task"], sess.final, task["reference"], store=store,
+                    match=task.get("match"))
                 if gturn:
                     g_cost, g_tokens = gturn.cost_usd, gturn.tokens_in + gturn.tokens_out
 
@@ -167,7 +168,21 @@ def _table(summary: list[dict[str, Any]], graded: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _resolve_tasks_path(path: str) -> str:
+    """Allow a bare eval name (``--tasks reasoning``) to resolve to a shipped set
+    under ``evals/``; otherwise use the path as given."""
+    if os.path.exists(path):
+        return path
+    if not os.path.splitext(path)[1] and "/" not in path and os.sep not in path:
+        for ext in (".yaml", ".yml", ".json"):
+            cand = os.path.join("evals", path + ext)
+            if os.path.exists(cand):
+                return cand
+    return path
+
+
 def _load_tasks(path: str) -> list[dict[str, Any]]:
+    path = _resolve_tasks_path(path)
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as fh:
@@ -185,5 +200,6 @@ def _load_tasks(path: str) -> list[dict[str, Any]]:
         elif isinstance(item, dict) and item.get("task"):
             tasks.append({"id": str(item.get("id", f"t{i + 1}")), "task": item["task"],
                           "rubric": item.get("rubric"),
-                          "reference": item.get("reference") or item.get("expected")})
+                          "reference": item.get("reference") or item.get("expected") or item.get("answer"),
+                          "match": item.get("match")})
     return tasks

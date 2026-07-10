@@ -1,0 +1,87 @@
+# quorum reasoning eval -- a tiny, objectively-gradable task set.
+#
+# Every task carries a gold `answer` and a `match` type, so `bench` scores each
+# strategy on *correctness* with NO grader model (free + deterministic):
+#
+#   quorum bench --tasks reasoning --strategies refine,selfconsistency,verify,selfmoa,cascade
+#
+# `match` is one of: numeric (auto-detected from a bare number / "#### N"),
+# choice (A/B/C letter), boolean (yes/no), exact (one-word/phrase), contains,
+# regex. Prompts ask the model to end with "Answer: <x>" so the final answer is
+# easy to extract even after chain-of-thought. This is a smoke-sized set for
+# comparing strategies on your models -- not a leaderboard-grade benchmark.
+
+tasks:
+  # --- arithmetic word problems (numeric, auto-detected) --------------------
+  - id: gsm-clips
+    task: >-
+      Natalia sold clips to 48 of her friends in April, and then she sold half
+      as many clips in May. How many clips did she sell altogether in April and
+      May? End with "Answer: <number>".
+    answer: "#### 72"
+
+  - id: gsm-robe
+    task: >-
+      A robe takes 2 bolts of blue fiber and half that much white fiber. How
+      many bolts in total does it take? End with "Answer: <number>".
+    answer: "#### 3"
+
+  - id: gsm-pages
+    task: >-
+      Julie reads 12 pages of her book every day. If she keeps this up for 5
+      days, how many pages will she have read in total? End with
+      "Answer: <number>".
+    answer: "#### 60"
+
+  - id: gsm-change
+    task: >-
+      A pen costs $3 and a notebook costs $5. You buy 2 pens and 1 notebook and
+      pay with a $20 bill. How much change do you get? End with
+      "Answer: <number>".
+    answer: "#### 9"
+
+  # --- multiple choice (choice: compare the A/B/C/D letter) -----------------
+  - id: mc-capital
+    task: >-
+      Which city is the capital of Australia?
+      A) Sydney  B) Canberra  C) Melbourne  D) Perth
+      End with "Answer: <letter>".
+    answer: "B"
+    match: choice
+
+  - id: mc-prime
+    task: >-
+      Which of these numbers is prime?
+      A) 21  B) 27  C) 29  D) 33
+      End with "Answer: <letter>".
+    answer: "C"
+    match: choice
+
+  # --- yes/no logic (boolean) -----------------------------------------------
+  - id: bool-syllogism
+    task: >-
+      All bloops are razzies. All razzies are lazzies. Does it follow that all
+      bloops are lazzies? Answer yes or no. End with "Answer: <yes/no>".
+    answer: "yes"
+    match: boolean
+
+  - id: bool-even
+    task: >-
+      Is 17 an even number? Answer yes or no. End with "Answer: <yes/no>".
+    answer: "no"
+    match: boolean
+
+  # --- short answer (exact, normalized one word/phrase) ---------------------
+  - id: exact-capital
+    task: >-
+      In a single word, what is the capital city of Japan? End with
+      "Answer: <word>".
+    answer: "Tokyo"
+    match: exact
+
+  - id: exact-antonym
+    task: >-
+      Give the single-word antonym of the word "increase". End with
+      "Answer: <word>".
+    answer: "decrease"
+    match: exact

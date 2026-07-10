@@ -328,6 +328,15 @@ def run() -> int:
             c.ok("grade numeric deterministic", gs == 100.0 and gc is True and gt is None)
             ps, _pc, pt = grade.grade(cfg, prov, "q", "text", "a prose reference with several words")
             c.ok("grade prose via mock grader", ps == 90.0 and pt is not None)
+            c.ok("final_answer after marker", grade.final_answer("work...\nAnswer: B") == "B")
+            c.ok("match choice true", grade.deterministic_match("so Answer: B", "B", "choice") is True)
+            c.ok("match choice false", grade.deterministic_match("Answer: C", "B", "choice") is False)
+            c.ok("match boolean true", grade.deterministic_match("Answer: yes", "yes", "boolean") is True)
+            c.ok("match boolean false", grade.deterministic_match("nope, Answer: no", "yes", "boolean") is False)
+            c.ok("match exact norm", grade.deterministic_match("Answer: Tokyo.", "tokyo", "exact") is True)
+            c.ok("match regex", grade.deterministic_match("total = 42 units", r"\b42\b", "regex") is True)
+            cs, cc, ct = grade.grade(cfg, prov, "q", "Answer: B", "B", match="choice")
+            c.ok("grade choice deterministic", cs == 100.0 and cc is True and ct is None)
 
             # --- promptsmith bootstrap (few-shot from store) --------------
             store.save_session(Session(id="top1", task="t", strategy="debate",
