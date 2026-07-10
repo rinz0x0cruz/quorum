@@ -385,6 +385,13 @@ def run() -> int:
             c.ok("serveapi model tag", obj["model"] == "quorum/refine")
             bad, _ = serveapi.complete_chat(cfg, {"messages": [{"role": "system", "content": "s"}]})
             c.ok("serveapi no-user 400", bad == 400)
+            _sse = []
+            serveapi._stream_events(cfg, {"model": "refine",
+                                          "messages": [{"role": "user", "content": "hi"}]}, _sse.append)
+            _sse_s = "".join(_sse)
+            c.ok("serveapi SSE streams progress + answer + DONE",
+                 ": round" in _sse_s and '"finish_reason": "stop"' in _sse_s
+                 and _sse_s.rstrip().endswith("data: [DONE]"))
 
             # --- context windows (history + grounding docs) ---------------
             from . import contextwindow as _cw

@@ -248,7 +248,7 @@ Run a local server that deliberates per request and answers in the OpenAI shape:
 ```powershell
 quorum serve --api --port 8802            # add --token <secret> to require auth; --host 0.0.0.0 to expose
 ```
-Point any OpenAI client's `base_url` at `http://127.0.0.1:8802/v1` and pass a strategy name as the `model` (`refine`, `debate`, `council`, `moa`, `ensemble`). `stream: true` and a per-request `--timeout` are supported.
+Point any OpenAI client's `base_url` at `http://127.0.0.1:8802/v1` and pass a strategy name as the `model` (`refine`, `debate`, `council`, `moa`, `ensemble`, `selfconsistency`, `selfmoa`, `reflexion`, `verify`, `cascade`). With `stream: true` the response is server-sent events — **live progress** (round scores, stop reason) as SSE comments during the deliberation, then the final answer as an OpenAI `chat.completion.chunk`. A per-request `--timeout` is supported.
 
 **Docker** (zero local Python):
 ```bash
