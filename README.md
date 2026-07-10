@@ -25,6 +25,7 @@ Multiple-model collaboration is well studied, and `quorum` bakes the lessons in 
 | Self-consistency + USC | Wang et al. 2022; Chen et al. 2023 ([2311.17311](https://arxiv.org/abs/2311.17311)) | `selfconsistency` strategy — majority vote or USC selection for free-form |
 | Reflexion | Shinn et al. 2023 ([2303.11366](https://arxiv.org/abs/2303.11366)) | `reflexion` strategy — verbal self-reflection kept in memory across attempts |
 | Chain-of-Verification | Dhuliawala et al. 2023 ([2309.11495](https://arxiv.org/abs/2309.11495)) | `verify` strategy — independent verification questions before a final answer |
+| Self-MoA (is mixing worth it?) | Li et al. 2025 ([2502.00674](https://arxiv.org/abs/2502.00674)) | `selfmoa` strategy — sample the single best model + aggregate; `bench` it vs `moa`/`council` |
 | Adaptive-Consistency | Aggarwal et al. EMNLP'23 ([2305.11860](https://arxiv.org/abs/2305.11860)) | `run.adaptive_samples` — sample until a confident majority, then stop |
 | LLM cascade (FrugalGPT) | Chen, Zaharia & Zou 2023 ([2305.05176](https://arxiv.org/abs/2305.05176)) | `cascade` strategy — cheap first, escalate only if the judge isn't satisfied |
 | LLM-as-judge biases | Zheng et al. NeurIPS'23 ([2306.05685](https://arxiv.org/abs/2306.05685)) | judge **shuffles candidate order** to curb position bias |
@@ -80,6 +81,7 @@ quorum --config config.mock.yaml run "anything" --strategy debate
 | `refine` | Single model generates → critiques itself → revises. A cheap single-agent baseline. | low |
 | `ensemble` | Sample one model N times; the judge picks the best. Self-consistency baseline. | low |
 | `selfconsistency` | Sample one model N times; return the **consensus** — majority vote (numeric) or USC selection (free-form). Optional adaptive early-stop. | low |
+| `selfmoa` | Sample the **single strongest** model N times and aggregate them — often beats mixing weaker models on free tiers. | medium |
 | `reflexion` | Single actor answers → judge scores → it writes a **self-reflection** kept in memory; each retry learns from all past reflections. | low |
 | `verify` | **Chain-of-verification**: draft → plan checks → answer them *independently* (draft withheld) → revise into a verified final. Cuts hallucination. | medium |
 | `cascade` | Run strategies cheapest-first (`refine`→`debate`→`council`) and stop at the first to clear the target — spends more **only on hard tasks**. | adaptive |

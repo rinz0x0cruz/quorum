@@ -256,6 +256,13 @@ def run() -> int:
                  bool(_vf.final) and {"draft", "verify", "revise"}
                  <= {t.kind for r in _vf.rounds for t in r.turns})
 
+            # --- self-MoA (single best model sampled + aggregated) -------
+            _sm = orchestrator.run_session(cfg, "selfmoa q", store=store, strategy="selfmoa",
+                                           promptsmith_on=False)
+            c.ok("selfmoa samples + aggregates",
+                 bool(_sm.final) and "self-moa" in _sm.stop_reason
+                 and [t.kind for r in _sm.rounds for t in r.turns].count("propose") >= 2)
+
             # --- structured events (#8): typed on_event stream ------------
             from . import events as _events
             _evs = []
