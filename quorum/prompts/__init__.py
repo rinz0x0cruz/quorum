@@ -51,6 +51,12 @@ from .stepback import (
     step_back,
     step_back_solve,
 )
+from .leasttomost import (
+    LTM_DECOMPOSE_SYSTEM,
+    LTM_SOLVE_SYSTEM,
+    decompose,
+    solve_subproblem,
+)
 
 __all__ = [
     # system prompts (mock provider keys off the QUORUM-* sentinels)
@@ -72,6 +78,8 @@ __all__ = [
     "SELFDISCOVER_SOLVE_SYSTEM",
     "STEPBACK_ABSTRACT_SYSTEM",
     "STEPBACK_SOLVE_SYSTEM",
+    "LTM_DECOMPOSE_SYSTEM",
+    "LTM_SOLVE_SYSTEM",
     # message builders
     "propose",
     "revise",
@@ -92,4 +100,6 @@ __all__ = [
     "discover_solve",
     "step_back",
     "step_back_solve",
+    "decompose",
+    "solve_subproblem",
 ]

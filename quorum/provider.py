@@ -81,6 +81,10 @@ class MockResponder:
             return self._sb_abstract(user)
         if "QUORUM-STEPBACK-SOLVE" in system:
             return self._sb_solve(spec, user)
+        if "QUORUM-LTM-DECOMPOSE" in system:
+            return self._ltm_decompose(user)
+        if "QUORUM-LTM-SOLVE" in system:
+            return self._ltm_solve(spec, user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -137,6 +141,13 @@ class MockResponder:
 
     def _sb_solve(self, spec: ModelSpec, user: str) -> str:
         return f"[{spec.model}] Final answer reasoned from the general principle."
+
+    def _ltm_decompose(self, user: str) -> str:
+        return ("1. What are the given quantities?\n2. What operation combines them?\n"
+                "3. Compute the final result.")
+
+    def _ltm_solve(self, spec: ModelSpec, user: str) -> str:
+        return f"[{spec.model}] Sub-answer derived from the prior steps."
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

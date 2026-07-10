@@ -28,6 +28,8 @@ EXPECTED_SYSTEMS = [
     "SELFDISCOVER_SOLVE_SYSTEM",
     "STEPBACK_ABSTRACT_SYSTEM",
     "STEPBACK_SOLVE_SYSTEM",
+    "LTM_DECOMPOSE_SYSTEM",
+    "LTM_SOLVE_SYSTEM",
 ]
 
 EXPECTED_BUILDERS = [
@@ -50,6 +52,8 @@ EXPECTED_BUILDERS = [
     "discover_solve",
     "step_back",
     "step_back_solve",
+    "decompose",
+    "solve_subproblem",
 ]
 
 
