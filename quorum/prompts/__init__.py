@@ -39,6 +39,12 @@ from .verify import (
     verified_final,
     verify_checks,
 )
+from .selfdiscover import (
+    SELFDISCOVER_PLAN_SYSTEM,
+    SELFDISCOVER_SOLVE_SYSTEM,
+    discover,
+    discover_solve,
+)
 
 __all__ = [
     # system prompts (mock provider keys off the QUORUM-* sentinels)
@@ -56,6 +62,8 @@ __all__ = [
     "VERIFY_PLAN_SYSTEM",
     "VERIFY_ANSWER_SYSTEM",
     "VERIFY_REVISE_SYSTEM",
+    "SELFDISCOVER_PLAN_SYSTEM",
+    "SELFDISCOVER_SOLVE_SYSTEM",
     # message builders
     "propose",
     "revise",
@@ -72,4 +80,6 @@ __all__ = [
     "plan_checks",
     "verify_checks",
     "verified_final",
+    "discover",
+    "discover_solve",
 ]
