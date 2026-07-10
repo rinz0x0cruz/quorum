@@ -50,3 +50,16 @@ def test_complete_chat_accepts_history_and_context(tmp_path):
         "context": [{"title": "Doc", "text": "grounding material"}]}
     code, obj = serveapi.complete_chat(cfg, req)
     assert code == 200 and obj["choices"][0]["message"]["content"]
+
+
+def test_stream_events_live_progress_then_answer(tmp_path):
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    req = {"model": "refine", "messages": [{"role": "user", "content": "hi"}]}
+    out: list = []
+    serveapi._stream_events(cfg, req, out.append)
+    s = "".join(out)
+    assert ": round 1: score" in s            # live progress as SSE comments during the run
+    assert ": done:" in s
+    assert '"role": "assistant"' in s and '"content":' in s   # then the OpenAI answer chunk
+    assert '"finish_reason": "stop"' in s
+    assert s.rstrip().endswith("data: [DONE]")
