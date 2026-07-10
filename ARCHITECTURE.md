@@ -50,7 +50,7 @@ Grouped by layer (all under `quorum/quorum/`).
 | `orchestrator.py` | The pipeline: promptsmith → context preamble → pre-hooks → strategy → post-hooks → persist | `run_session(...)` |
 | `strategies/__init__.py` | Strategy **registry** + entry-point discovery + shared `Context` + resolved `RunOptions` | `Context`, `RunOptions`, `get`, `available` |
 | `hooks.py` | Pre/post extension hooks around the strategy (retrieval, filters, post-processing) | `register_pre`, `register_post`, `run_pre/post` |
-| `strategies/{debate,council,moa,refine,ensemble,selfconsistency,reflexion,verify,cascade}.py` | The deliberation algorithms | each exposes `run(ctx)` |
+| `strategies/{debate,council,moa,refine,ensemble,selfconsistency,selfmoa,reflexion,verify,cascade}.py` | The deliberation algorithms | each exposes `run(ctx)` |
 
 ### Reasoning services — the moving parts a strategy composes
 | Module | Responsibility | Key symbols |
