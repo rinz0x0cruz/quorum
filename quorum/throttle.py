@@ -31,6 +31,17 @@ FREE_RPD_WITH_CREDITS = 1000
 _UA = "quorum (+https://github.com/rinz0x0cruz/quorum)"
 
 
+def _is_openrouter_provider(cfg: dict, provider: str) -> bool:
+    """Whether a provider is OpenRouter -- by the canonical ``openrouter`` name or
+    an ``openrouter.ai`` base_url. The free-tier RPM ceiling and the ``GET /key``
+    quota probe are OpenRouter-specific, so provider-specific report bits gate on
+    this (a Groq/OpenAI/Ollama run won't show OpenRouter limits or 404 on /key)."""
+    if (provider or "").lower() == "openrouter":
+        return True
+    base = ((provider_conf(cfg, provider) or {}).get("base_url", "") or "").lower()
+    return "openrouter.ai" in base
+
+
 def _minute(ts: str) -> str:
     """Bucket an ISO ``...THH:MM:SSZ`` timestamp to the minute."""
     return ts[:16] if ts else ""
@@ -90,12 +101,14 @@ def recommendations(summary: dict[str, Any], cfg: dict,
     run = cfg.get("run", {}) or {}
     members = (cfg.get("council", {}) or {}).get("members", []) or []
 
-    peak = max(summary.get("peak_rpm", {}).values(), default=0)
-    if peak >= FREE_RPM:
-        recs.append(f"Peak {peak} req/min hit the free ceiling ({FREE_RPM}/min). "
+    # The free-tier RPM ceiling is OpenRouter-specific; only judge OpenRouter peaks.
+    or_peak = max((rpm for prov, rpm in summary.get("peak_rpm", {}).items()
+                   if _is_openrouter_provider(cfg, prov)), default=0)
+    if or_peak >= FREE_RPM:
+        recs.append(f"Peak {or_peak} req/min hit the free ceiling ({FREE_RPM}/min). "
                     f"Set run.rate_limit_rpm to ~{FREE_RPM - 2} to pace calls under it.")
-    elif peak >= FREE_RPM * 0.8:
-        recs.append(f"Peak {peak} req/min is close to the {FREE_RPM}/min ceiling; "
+    elif or_peak >= FREE_RPM * 0.8:
+        recs.append(f"Peak {or_peak} req/min is close to the {FREE_RPM}/min ceiling; "
                     f"consider run.rate_limit_rpm ~{FREE_RPM - 2}.")
 
     if summary.get("throttled") and run.get("parallel", True):
@@ -124,14 +137,18 @@ def recommendations(summary: dict[str, Any], cfg: dict,
 def key_status(cfg: dict, provider: str = "openrouter", *, timeout: int = 15) -> Optional[dict[str, Any]]:
     """Probe a provider's key endpoint for quota/credits (OpenRouter ``GET /key``).
 
-    Returns the provider's ``data`` object, ``{"error": ...}`` on failure, or
-    ``None`` if the provider has no base_url/key configured. Network I/O.
+    ``GET /key`` is OpenRouter-specific, so non-OpenRouter providers return
+    ``{"unsupported": <provider>}`` (no request is made). Returns the provider's
+    ``data`` object, ``{"error": ...}`` on failure, or ``None`` if the provider
+    has no base_url/key configured. Network I/O (OpenRouter only).
     """
     conf = provider_conf(cfg, provider)
     base = (conf.get("base_url", "") or "").rstrip("/")
     key = api_key(cfg, provider)
     if not base or not key:
         return None
+    if "openrouter.ai" not in base.lower():
+        return {"unsupported": provider}
     req = urllib.request.Request(base + "/key",
                                  headers={"Authorization": f"Bearer {key}", "User-Agent": _UA})
     try:
@@ -162,11 +179,14 @@ def run(cfg: dict, store: Any, *, provider: str = "openrouter", limit: int = 500
 
     print("  peak requests/min per provider:")
     for prov, rpm in sorted(summary["peak_rpm"].items(), key=lambda kv: -kv[1]):
-        flag = "  <= at/over free ceiling" if rpm >= FREE_RPM else ""
-        print(f"    {prov:<16} {rpm:>3}/min (free limit {FREE_RPM}){flag}")
+        if _is_openrouter_provider(cfg, prov):
+            flag = "  <= at/over free ceiling" if rpm >= FREE_RPM else ""
+            print(f"    {prov:<16} {rpm:>3}/min (OpenRouter free limit {FREE_RPM}){flag}")
+        else:
+            print(f"    {prov:<16} {rpm:>3}/min")
 
-    key = key_status(cfg, provider) if probe else None
-    if key and not key.get("error"):
+    key = key_status(cfg, provider) if (probe and _is_openrouter_provider(cfg, provider)) else None
+    if key and not key.get("error") and not key.get("unsupported"):
         print("  quota:")
         for k in ("is_free_tier", "usage", "usage_daily", "limit", "limit_remaining"):
             if k in key:
