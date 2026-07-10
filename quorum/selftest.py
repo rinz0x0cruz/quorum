@@ -263,6 +263,13 @@ def run() -> int:
                  bool(_sm.final) and "self-moa" in _sm.stop_reason
                  and [t.kind for r in _sm.rounds for t in r.turns].count("propose") >= 2)
 
+            # --- Self-Discover (compose reasoning structure -> solve) ----
+            _sd = orchestrator.run_session(cfg, "selfdiscover q", store=store, strategy="selfdiscover",
+                                           promptsmith_on=False)
+            c.ok("selfdiscover plans + solves",
+                 bool(_sd.final) and "self-discover" in _sd.stop_reason
+                 and {"plan", "solve"} <= {t.kind for r in _sd.rounds for t in r.turns})
+
             # --- structured events (#8): typed on_event stream ------------
             from . import events as _events
             _evs = []

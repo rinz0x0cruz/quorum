@@ -73,6 +73,10 @@ class MockResponder:
             return self._verify_answer(user)
         if "QUORUM-VERIFY-REVISE" in system:
             return self._verify_revise(spec, user)
+        if "QUORUM-SELFDISCOVER-PLAN" in system:
+            return self._sd_plan(user)
+        if "QUORUM-SELFDISCOVER-SOLVE" in system:
+            return self._sd_solve(spec, user)
         if "QUORUM-PROMPTSMITH" in system:
             return self._promptsmith(user)
         if "QUORUM-CHAIRMAN" in system or "QUORUM-AGGREGATOR" in system:
@@ -115,6 +119,13 @@ class MockResponder:
 
     def _verify_revise(self, spec: ModelSpec, user: str) -> str:
         return f"[{spec.model}] Verified final answer, corrected against the checks."
+
+    def _sd_plan(self, user: str) -> str:
+        return ("1. Restate what is asked.\n2. List the given facts and constraints.\n"
+                "3. Reason step by step to the result.\n4. Verify the result is plausible.")
+
+    def _sd_solve(self, spec: ModelSpec, user: str) -> str:
+        return f"[{spec.model}] Final answer produced by following the composed reasoning structure."
 
     def _promptsmith(self, user: str) -> str:
         return ("Approach: restate the goal in one line, decompose the problem, state "

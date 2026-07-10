@@ -24,6 +24,7 @@ _BUILTIN = {
     "reflexion": "quorum.strategies.reflexion",
     "verify": "quorum.strategies.verify",
     "cascade": "quorum.strategies.cascade",
+    "selfdiscover": "quorum.strategies.selfdiscover",
 }
 
 

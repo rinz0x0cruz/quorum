@@ -35,6 +35,7 @@ selfmoa = "quorum.strategies.selfmoa:run"
 reflexion = "quorum.strategies.reflexion:run"
 verify = "quorum.strategies.verify:run"
 cascade = "quorum.strategies.cascade:run"
+selfdiscover = "quorum.strategies.selfdiscover:run"
 
 # Text scorers are plugins too: register a class or instance resolving to a
 # ``Scorer`` (``score(query, text) -> float`` in 0..1) in this group. The built-in
