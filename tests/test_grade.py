@@ -128,14 +128,18 @@ def test_resolve_builtin_eval_name(tmp_path, monkeypatch):
     assert bench._resolve_tasks_path("does-not-exist") == "does-not-exist"  # real paths untouched
 
 
-def test_shipped_reasoning_eval_is_wellformed():
+def test_shipped_eval_sets_are_wellformed():
+    import glob
     import os
     from quorum import bench
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tasks = bench._load_tasks(os.path.join(root, "evals", "reasoning.yaml"))
-    assert len(tasks) >= 8
+    files = glob.glob(os.path.join(root, "evals", "*.yaml"))
+    assert len(files) >= 2, files  # reasoning + reasoning-hard
     valid = {None, "numeric", "number", "num", "choice", "mc", "multiple_choice",
              "boolean", "bool", "yesno", "yes_no", "exact", "contains", "regex"}
-    for t in tasks:
-        assert t["task"] and t["reference"], t
-        assert t.get("match") in valid, t
+    for path in files:
+        tasks = bench._load_tasks(path)
+        assert len(tasks) >= 8, path
+        for t in tasks:
+            assert t["task"] and t["reference"], (path, t)
+            assert t.get("match") in valid, (path, t)
