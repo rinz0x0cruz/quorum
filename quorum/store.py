@@ -55,7 +55,9 @@ CREATE TABLE IF NOT EXISTS bench (
     tokens_in INTEGER,
     tokens_out INTEGER,
     cost_usd REAL,
-    seconds REAL
+    seconds REAL,
+    match REAL,
+    correct INTEGER
 );
 CREATE TABLE IF NOT EXISTS runs (
     ts TEXT,
@@ -109,6 +111,10 @@ class Store:
         for col, ddl in (("stop_reason", "TEXT"), ("cost_usd", "REAL DEFAULT 0")):
             if col not in existing:
                 self.conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {ddl}")
+        bench_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(bench)")}
+        for col, ddl in (("match", "REAL"), ("correct", "INTEGER")):
+            if col not in bench_cols:
+                self.conn.execute(f"ALTER TABLE bench ADD COLUMN {col} {ddl}")
         self.conn.commit()
 
     def close(self) -> None:
@@ -190,11 +196,13 @@ class Store:
 
     # ---- benchmark ------------------------------------------------------
     def add_bench_row(self, strategy: str, task_id: str, score: float, rounds: int,
-                      tokens_in: int, tokens_out: int, cost_usd: float, seconds: float) -> None:
+                      tokens_in: int, tokens_out: int, cost_usd: float, seconds: float,
+                      match: Optional[float] = None, correct: Optional[bool] = None) -> None:
         self.conn.execute(
             "INSERT INTO bench (ts, strategy, task_id, score, rounds, tokens_in, tokens_out, "
-            "cost_usd, seconds) VALUES (?,?,?,?,?,?,?,?,?)",
-            (now_iso(), strategy, task_id, score, rounds, tokens_in, tokens_out, cost_usd, seconds),
+            "cost_usd, seconds, match, correct) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (now_iso(), strategy, task_id, score, rounds, tokens_in, tokens_out, cost_usd, seconds,
+             match, None if correct is None else int(correct)),
         )
         self.conn.commit()
 
