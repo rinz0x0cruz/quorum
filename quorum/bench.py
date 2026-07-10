@@ -69,7 +69,8 @@ def run(cfg: dict, tasks_path: str, strategies: list[str], store: Any, *,
             }
             rows.append(row)
             store.add_bench_row(strat, task["id"], row["score"], row["rounds"],
-                                row["tokens_in"], row["tokens_out"], row["cost_usd"], row["seconds"])
+                                row["tokens_in"], row["tokens_out"], row["cost_usd"], row["seconds"],
+                                match=row["match"], correct=row["correct"])
             if verbose:
                 if errored and task.get("reference"):
                     extra = "  [ERR: no answer / throttled]"

@@ -49,3 +49,34 @@ def test_bench_shares_one_provider_across_tasks(tmp_path, monkeypatch):
     assert len(seen) == 4                       # 2 tasks x 2 strategies
     assert seen[0] is not None
     assert all(p is seen[0] for p in seen)      # one shared provider -> one rate limiter
+
+
+def test_bench_persists_and_dashboards_accuracy(tmp_path):
+    from quorum import render
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text("tasks:\n  - id: m1\n    task: what is 2+2\n    answer: '#### 4'\n", encoding="utf-8")
+    with Store(cfg["output"]["db_path"]) as store:
+        bench.run(cfg, str(tasks), ["refine", "ensemble"], store, verbose=False)
+        rows = store.bench_rows()
+        # match/correct are now persisted on every bench row (graded task -> not None)
+        assert all("match" in r and "correct" in r for r in rows)
+        assert any(r["match"] is not None for r in rows)
+        path = render.build(cfg, store)
+    with open(path, encoding="utf-8") as fh:
+        page = fh.read()
+    # the graded summary (accuracy / mean_match) reaches the dashboard payload
+    assert '"accuracy"' in page and '"mean_match"' in page
+
+
+def test_bench_dashboard_no_accuracy_when_ungraded(tmp_path):
+    from quorum import render
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    tasks = tmp_path / "tasks.yaml"
+    tasks.write_text("tasks:\n  - id: q1\n    task: open ended question\n", encoding="utf-8")
+    with Store(cfg["output"]["db_path"]) as store:
+        bench.run(cfg, str(tasks), ["refine"], store, verbose=False)
+        path = render.build(cfg, store)
+    with open(path, encoding="utf-8") as fh:
+        page = fh.read()
+    assert '"mean_match"' not in page            # no reference -> no accuracy columns

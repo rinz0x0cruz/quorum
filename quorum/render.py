@@ -25,7 +25,8 @@ def build(cfg: dict, store: Store) -> str:
     summary = bench_mod.aggregate(
         [{"strategy": r["strategy"], "task_id": r["task_id"], "score": r["score"],
           "rounds": r["rounds"], "tokens": r["tokens_in"] + r["tokens_out"],
-          "cost_usd": r["cost_usd"], "seconds": r["seconds"]} for r in rows],
+          "cost_usd": r["cost_usd"], "seconds": r["seconds"],
+          "match": r["match"], "correct": r["correct"]} for r in rows],
         strategies, n_tasks) if rows else []
 
     payload: dict[str, Any] = {
@@ -124,12 +125,17 @@ function el(t, c, txt){const e=document.createElement(t); if(c)e.className=c; if
 function renderBench(){
   const host=document.getElementById('bench');
   if(!D.bench.length){document.getElementById('benchWrap').style.display='none';return;}
-  const cols=[['strategy','strategy'],['mean_score','score'],['win_rate','win%'],
-    ['mean_rounds','rounds'],['mean_tokens','tokens'],['mean_cost_usd','cost$'],['mean_seconds','sec']];
+  const graded=D.bench.some(r=>r.accuracy!=null||r.mean_match!=null);
+  const cols=[['strategy','strategy']];
+  if(graded){cols.push(['mean_match','match'],['accuracy','acc%']);}
+  cols.push(['mean_score','score'],['win_rate','win%'],['mean_rounds','rounds'],
+    ['mean_tokens','tokens'],['mean_cost_usd','cost$'],['mean_seconds','sec']);
   const tbl=el('table'), thead=el('tr');
   cols.forEach(c=>thead.appendChild(el('th',null,c[1]))); tbl.appendChild(thead);
   D.bench.forEach((r,i)=>{const tr=el('tr');
-    cols.forEach(c=>{let v=r[c[0]]; if(typeof v==='number')v=(c[0]==='mean_cost_usd')?v.toFixed(4):(Number.isInteger(v)?v:v.toFixed(1));
+    cols.forEach(c=>{let v=r[c[0]];
+      if(v==null){v='\u2014';}
+      else if(typeof v==='number')v=(c[0]==='mean_cost_usd')?v.toFixed(4):(Number.isInteger(v)?v:v.toFixed(1));
       const td=el('td',null,String(v)); if(i===0&&c[0]==='strategy')td.className='win'; tr.appendChild(td);});
     tbl.appendChild(tr);});
   host.appendChild(tbl);
