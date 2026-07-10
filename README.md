@@ -126,6 +126,37 @@ ensemble     70.0    0.0    1.00    1082    0.0000   0.02
 
 (Numbers above are the deterministic mock; real models will differ — that's the point of running it on your own tasks.)
 
+### Grade on correctness, not just judge score
+
+Give a task a gold `answer` and a `match` type, and `bench` scores every strategy on **accuracy** — deterministically, with **no grader model** (free and objective):
+
+```powershell
+quorum bench --tasks reasoning --strategies refine,selfconsistency,verify,selfmoa,cascade
+```
+
+`--tasks reasoning` resolves to the shipped [`evals/reasoning.yaml`](evals/reasoning.yaml) (a small arithmetic / multiple-choice / yes-no / short-answer set). `match` is one of:
+
+| `match` | grades by | example gold |
+|---|---|---|
+| `numeric` *(auto)* | the final number (a bare number or a GSM8K `#### 42` line) | `#### 72` |
+| `choice` | the A/B/C/… letter | `B` |
+| `boolean` | yes/no · true/false | `yes` |
+| `exact` | normalized final word/phrase | `Canberra` |
+| `contains` | gold appears anywhere in the answer | `decrease` |
+| `regex` | a pattern matches the answer | `\b42\b` |
+
+Numeric is auto-detected, so existing GSM8K-style task files keep working. Prompts that end with `Answer: <x>` extract cleanly even after chain-of-thought; tasks with no `match` (and no gold number) fall back to the LLM grader. The graded run adds `match`/`acc%` columns and ranks by match instead of judge score:
+
+```
+strategy    match   acc%  err  score   win%  rounds  tokens  cost$   sec
+-----------------------------------------------------------------------
+verify       ..     ..     0    ..     ..     ..      ..    0.0000   ..
+selfmoa      ..     ..     0    ..     ..     ..      ..    0.0000   ..
+...
+```
+
+(Grading is free — `cost$` stays `0.0000` — so the only spend is the deliberation itself. Run it live on your models for a real correctness ranking.)
+
 ## Scoring model
 
 Every round, an impartial **judge** model scores the best candidate on a **0–100** scale
