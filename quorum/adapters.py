@@ -42,7 +42,8 @@ def host_config(cfg: dict) -> dict:
     role = f"{provider}:{model}"
 
     providers = {provider: {"base_url": ai.get("base_url", ""),
-                            "api_key_env": ai.get("api_key_env", "")}}
+                            "api_key_env": ai.get("api_key_env", ""),
+                            "model_options": ai.get("model_options") or {}}}
     providers.update(q.get("providers") or {})
     members = q.get("members") or [{"name": "m1", "provider": provider, "model": model}]
 

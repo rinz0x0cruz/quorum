@@ -31,6 +31,15 @@ def test_host_config_maps_rate_limit_and_fallbacks():
     assert q["run"]["fallbacks"] == ["mock:mock/fallback"]
 
 
+def test_host_config_maps_exact_model_options():
+    cfg = host_cfg()
+    cfg["ai"]["model_options"] = {
+        "mock/m1": {"reasoning_effort": "low", "include_reasoning": False},
+    }
+    q = adapters.host_config(cfg)
+    assert q["providers"]["mock"]["model_options"] == cfg["ai"]["model_options"]
+
+
 def test_api_build_config_delegates_to_adapter():
     """api.build_config is now a thin wrapper -- identical output to the adapter."""
     cfg = host_cfg()
