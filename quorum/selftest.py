@@ -54,7 +54,8 @@ def run() -> int:
     c = _Check()
 
     # --- model ------------------------------------------------------------
-    c.ok("content_hash stable", content_hash("a", "b") == content_hash("a", "b"))
+    c.ok("content_hash + package version", content_hash("a", "b") == content_hash("a", "b")
+         and __import__("quorum").__version__ == "0.3.0")
     c.ok("session_id prefixed", session_id("t", "debate", 1.0).startswith("s-"))
     c.ok("vendor maps claude", model_vendor("anthropic/claude-3.5") == "anthropic")
     c.ok("vendor maps gpt", model_vendor("openai/gpt-4o") == "openai")
