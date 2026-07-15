@@ -15,9 +15,9 @@ Host config -- add a ``quorum:`` block to the tool's existing ``config.yaml``::
       max_rounds: 2
       # Optional extra council members; if omitted, the tool's single `ai.model`
       # is used (so even one model gains self-refine):
-      members:
-        - { name: a, provider: openrouter, model: google/gemma-4-31b-it:free }
-        - { name: b, provider: openrouter, model: openai/gpt-oss-120b:free }
+            members:
+                - { name: a, provider: openrouter, model: nvidia/nemotron-3-ultra-550b-a55b:free }
+                - { name: b, provider: openrouter, model: google/gemma-4-31b-it:free }
       providers:
         openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: TOOL_OPENROUTER_KEY }
 

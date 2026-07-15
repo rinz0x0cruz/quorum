@@ -28,6 +28,24 @@ from .config import api_key, member_specs, provider_conf, role_spec
 from .model import ModelSpec, Turn, content_hash
 
 
+_RESERVED_MODEL_OPTIONS = {
+    "model", "messages", "temperature", "max_tokens", "max_completion_tokens",
+    "response_format", "stream",
+}
+
+
+def _model_options(conf: dict[str, Any], model: str) -> dict[str, Any]:
+    """Return trusted per-model request controls without allowing core overrides."""
+    model_options = conf.get("model_options") or {}
+    if not isinstance(model_options, dict):
+        return {}
+    configured = model_options.get(model, {})
+    if not isinstance(configured, dict):
+        return {}
+    return {key: value for key, value in configured.items()
+            if key not in _RESERVED_MODEL_OPTIONS}
+
+
 @dataclass
 class Completion:
     text: str
@@ -279,7 +297,11 @@ class Provider:
         run = self.cfg.get("run", {}) or {}
         temp = run.get("temperature", 0.5) if temperature is None else temperature
         maxt = run.get("max_tokens", 1200) if max_tokens is None else max_tokens
-        key = content_hash(spec.provider, spec.model, temp, json.dumps(messages, sort_keys=True))
+        options = _model_options(provider_conf(self.cfg, spec.provider), spec.model)
+        key_parts = [spec.provider, spec.model, temp, json.dumps(messages, sort_keys=True)]
+        if options:
+            key_parts.append(json.dumps(options, sort_keys=True))
+        key = content_hash(*key_parts)
 
         if cache and store is not None and hasattr(store, "ai_cache_get"):
             hit = store.ai_cache_get(key)
@@ -364,6 +386,7 @@ class Provider:
             "model": spec.model, "messages": messages,
             "temperature": temperature, "max_tokens": max_tokens,
         }
+        body.update(_model_options(conf, spec.model))
         if response_format:
             body["response_format"] = response_format
         payload = json.dumps(body).encode("utf-8")

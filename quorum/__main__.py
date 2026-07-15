@@ -167,6 +167,44 @@ def cmd_selftest(args, cfg):
     return selftest.run()
 
 
+def cmd_packs_fetch(args, cfg):
+    from . import datasets
+    selected = None if args.source == "all" else [args.source]
+    records = datasets.fetch_sources(args.root, selected, force=args.force)
+    for record in records:
+        print(f"  {record['status']:<10} {record['path']}  {record['observed_size_bytes']} bytes  "
+              f"sha256:{record['observed_sha256']}")
+    return 0
+
+
+def cmd_packs_prepare(args, cfg):
+    from . import datasets
+    paths = datasets.prepare_all(args.sources, args.out)
+    for path in paths:
+        print(f"  prepared  {path}")
+    return 0
+
+
+def cmd_packs_verify(args, cfg):
+    from pathlib import Path
+    from . import evalpacks
+    paths = [Path(path) for path in args.paths]
+    if not paths:
+        paths = sorted(Path(args.fixtures).glob("*/manifest.yaml"))
+    failed = 0
+    for path in paths:
+        result = evalpacks.verify_pack(path)
+        if result.ok:
+            counts = ", ".join(f"{name}={digest[:15]}..." for name, digest in result.fingerprints.items())
+            print(f"  [PASS] {result.pack_id}@{result.version}  {counts}")
+        else:
+            failed += 1
+            print(f"  [FAIL] {path}")
+            for error in result.errors:
+                print(f"    - {error}")
+    return int(bool(failed))
+
+
 # --------------------------------------------------------------------------
 # parser
 # --------------------------------------------------------------------------
@@ -253,6 +291,26 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-probe", action="store_true",
                     help="Skip the live key/quota probe (offline: telemetry only)")
     sp.set_defaults(func=cmd_throttle)
+
+    sp = sub.add_parser("packs", help="Fetch, prepare, and verify evaluation datasets")
+    packs = sp.add_subparsers(dest="packs_command", required=True)
+
+    pp = packs.add_parser("fetch", help="Download pinned public dataset sources")
+    pp.add_argument("--source", default="all",
+                    choices=["all", "banking77", "cisa-kev", "gsm8k", "humaneval", "openalex"])
+    pp.add_argument("--root", default="data/packs/sources", help="Ignored raw-source directory")
+    pp.add_argument("--force", action="store_true", help="Refetch files already present")
+    pp.set_defaults(func=cmd_packs_fetch)
+
+    pp = packs.add_parser("prepare", help="Build full local packs from downloaded sources")
+    pp.add_argument("--sources", default="data/packs/sources", help="Raw-source directory")
+    pp.add_argument("--out", default="data/packs/prepared", help="Ignored prepared-pack directory")
+    pp.set_defaults(func=cmd_packs_prepare)
+
+    pp = packs.add_parser("verify", help="Verify pack metadata, hashes, and split isolation")
+    pp.add_argument("paths", nargs="*", help="Pack directories or manifest files")
+    pp.add_argument("--fixtures", default="evals/packs", help="Default pack directory")
+    pp.set_defaults(func=cmd_packs_verify)
 
     sub.add_parser("selftest", help="Offline self-tests").set_defaults(func=cmd_selftest)
     return p

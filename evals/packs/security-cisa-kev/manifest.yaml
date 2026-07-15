@@ -1,0 +1,35 @@
+schema_version: 1
+id: security-cisa-kev
+version: 1.0.0
+use_case: security_analysis
+license:
+  spdx: CC0-1.0
+  redistribution: true
+  training: true
+sources:
+- id: cisa-kev
+  url: https://raw.githubusercontent.com/cisagov/kev-data/46887d9ebae72243eb0e476876a75152e63e90d9/known_exploited_vulnerabilities.json
+  revision: 46887d9ebae72243eb0e476876a75152e63e90d9
+  files:
+  - path: cisa-kev/known_exploited_vulnerabilities.json
+    sha256: 769c7c2dbf9f55343e50298691e47932140f25fda3e820e4b1c57ba36fcc6c6b
+    mutable: false
+  - path: cisa-kev/known_exploited_vulnerabilities_schema.json
+    sha256: 577f4ccc06b7b7c6a109e1a0d6457a26db7fc5219398ff2e287b9a7e14e2d9ef
+    mutable: false
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+splits:
+  train:
+    path: train.json
+    fingerprint: sha256:1ed29eb826e6e3e744943a5cc20cfb84a5f0f755ef54116e6f632dd72a9fc37c
+  validation:
+    path: validation.json
+    fingerprint: sha256:5cd8ab81507073291ee1e86b9f8b865a2b74599423baa21ea4af01a5d3d3e650
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:edb491301cd0a1b562b97e8c83e3b736b3125c27fd0ad683bf3bd57d89513203

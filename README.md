@@ -163,6 +163,26 @@ selfmoa      ..     ..     0    ..     ..     ..      ..    0.0000   ..
 
 (Grading is free — `cost$` stays `0.0000` — so the only spend is the deliberation itself. Run it live on your models for a real correctness ranking.)
 
+### Versioned evaluation packs
+
+Six small, attributed smoke packs ship under [`evals/packs`](evals/packs): reasoning/math
+(GSM8K), extraction/classification (Banking77), security analysis (CISA KEV), static coding
+(HumanEval plus Quorum-authored training tasks), research synthesis (fixed OpenAlex records),
+and writing/summarization (Quorum-authored). Every pack declares its license, source revision,
+source checksums, train/validation/promotion-test files, and canonical split fingerprints.
+
+```powershell
+quorum packs verify                    # offline: verify all shipped packs
+quorum packs fetch                     # explicit network download into ignored data/
+quorum packs prepare                   # build full local packs under ignored data/
+quorum packs fetch --source gsm8k      # fetch one registered source
+```
+
+`packs fetch` pins GitHub-hosted corpora to full commits and rejects checksum or size drift.
+OpenAlex is a dated local snapshot because its metadata can change. Promotion-test splits are
+sealed and excluded from training. HumanEval is used only for static candidate selection in
+validation/test: Quorum does not execute imported tests or model-generated code.
+
 ## Scoring model
 
 Every round, an impartial **judge** model scores the best candidate on a **0–100** scale
@@ -198,11 +218,11 @@ Any OpenAI-compatible `/chat/completions` endpoint works. Configure a roster of 
 ```yaml
 council:
   members:
-    - { name: alice, provider: openrouter, model: meta-llama/llama-3.3-70b-instruct:free }
+    - { name: alice, provider: openrouter, model: nvidia/nemotron-3-ultra-550b-a55b:free }
     - { name: bob,   provider: ollama,     model: llama3.1 }          # local, keyless
     - { name: carol, provider: openai,     model: gpt-4o-mini }
-  judge:    openrouter:openai/gpt-oss-120b:free
-  chairman: openrouter:openai/gpt-oss-120b:free
+  judge:    openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
+  chairman: openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
 providers:
   openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: QUORUM_OPENROUTER_KEY }
   ollama:     { base_url: http://localhost:11434/v1,    api_key_env: "" }
@@ -225,6 +245,7 @@ Secrets never live in config — each provider names an environment variable.
 | `quorum chat --system "…" --user "…" [--json --strategy X]` | One-shot deliberation for scripts / CI / other languages |
 | `quorum export [--format json\|csv\|md] [--session id]` | Export a transcript |
 | `quorum models [--ping]` | List the council (and check reachability) |
+| `quorum packs fetch\|prepare\|verify` | Download, prepare, or verify versioned evaluation packs |
 | `quorum selftest` | Offline self-tests (no network, no keys) |
 
 ## Extending it
@@ -250,8 +271,8 @@ quorum:
   max_rounds: 2
   # Optional extra council members; omit to just self-refine the tool's own ai.model:
   members:
-    - { name: a, provider: openrouter, model: google/gemma-4-31b-it:free }
-    - { name: b, provider: openrouter, model: openai/gpt-oss-120b:free }
+    - { name: a, provider: openrouter, model: nvidia/nemotron-3-ultra-550b-a55b:free }
+    - { name: b, provider: openrouter, model: google/gemma-4-31b-it:free }
   providers:
     openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: TOOL_OPENROUTER_KEY }
 ```

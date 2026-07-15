@@ -21,14 +21,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # OpenAI, Groq, ...). These are examples; you own the roster.
     "council": {
         "members": [
-            {"name": "alice", "provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct:free"},
-            {"name": "bob",   "provider": "openrouter", "model": "qwen/qwen3-next-80b-a3b-instruct:free"},
-            {"name": "carol", "provider": "openrouter", "model": "google/gemma-4-31b-it:free"},
+            {"name": "alice", "provider": "openrouter", "model": "nvidia/nemotron-3-ultra-550b-a55b:free"},
+            {"name": "bob",   "provider": "openrouter", "model": "google/gemma-4-31b-it:free"},
+            {"name": "carol", "provider": "openrouter", "model": "openai/gpt-oss-20b:free"},
         ],
         # Single-model roles (referenced as "provider:model"). Empty -> first member.
-        "judge": "openrouter:openai/gpt-oss-120b:free",
-        "chairman": "openrouter:openai/gpt-oss-120b:free",
-        "aggregator": "openrouter:openai/gpt-oss-120b:free",
+        "judge": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "chairman": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+        "aggregator": "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
     },
 
     # Provider profiles: any OpenAI-compatible /chat/completions endpoint. The
@@ -36,9 +36,73 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "providers": {
         "openrouter": {"base_url": "https://openrouter.ai/api/v1", "api_key_env": "QUORUM_OPENROUTER_KEY"},
         "openai":     {"base_url": "https://api.openai.com/v1",    "api_key_env": "QUORUM_OPENAI_KEY"},
-        "groq":       {"base_url": "https://api.groq.com/openai/v1", "api_key_env": "QUORUM_GROQ_KEY"},
+        "groq":       {"base_url": "https://api.groq.com/openai/v1", "api_key_env": "QUORUM_GROQ_KEY",
+                   "model_options": {}},
         "ollama":     {"base_url": "http://localhost:11434/v1",    "api_key_env": ""},  # local, keyless
         "mock":       {"base_url": "", "api_key_env": ""},                              # offline
+    },
+
+    # Optional provider-catalog discovery. Syncing is always explicit; normal
+    # runs consume only the pinned model ids configured above.
+    "catalog": {
+        "enabled": False,
+        "cache_dir": "data/catalogs",
+        "providers": {},
+        "allow_preview": False,
+        "expiry_horizon_days": 14,
+        "access_classes": ["zero_price", "free_quota", "local"],
+    },
+
+    # Reproducible model/profile evaluation. The existing ``bench`` command
+    # remains strategy-centric; this section is inert until the eval workflow is
+    # explicitly invoked.
+    "evaluation": {
+        "enabled": False,
+        "packs_dir": "evals",
+        "repeats": 1,
+        "min_promotion_samples": 30,
+        "min_served_rate": 0.95,
+        "bootstrap_samples": 2000,
+    },
+
+    # Named, pinned use-case profiles. Definitions are user-owned overlays and
+    # are never selected automatically while profiles/routing are disabled.
+    "profiles": {
+        "enabled": False,
+        "active": "",
+        "paths": [],
+        "definitions": {},
+    },
+
+    # Selection precedence will be explicit hint -> deterministic rules -> an
+    # optional learned router -> the unchanged run.strategy/model defaults.
+    "routing": {
+        "enabled": False,
+        "rules": [],
+        "learned": False,
+        "artifact": "",
+        "min_confidence": 0.8,
+    },
+
+    # ``single`` exactly preserves today's one-judge behavior. Jury and peer
+    # modes are opt-in and will use family-balanced ballots when implemented.
+    "decision": {
+        "mode": "single",
+        "jurors": [],
+        "min_ballots": 3,
+        "min_families": 3,
+        "preserve_dissent": True,
+    },
+
+    # Training remains an isolated optional workflow. The core process never
+    # imports GPU/training libraries; named backends describe subprocess/plugin
+    # runners and are disabled by default.
+    "tune": {
+        "enabled": False,
+        "backend": "mock",
+        "backends": {},
+        "output_dir": "data/tuning",
+        "python": "",
     },
 
     "run": {
@@ -163,9 +227,16 @@ def load_config(path: str | None = None, *, warn: bool = False) -> dict[str, Any
     return json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
 
 
-# Subtrees whose keys are user-defined (provider names, model prices, rubric
-# criteria) and so must not be flagged as unknown.
-_OPEN_SUBTREES = ("providers", "cost.pricing", "judge.rubric")
+# Subtrees whose keys are user-defined (provider/profile/backend names, model
+# prices, rubric criteria) and so must not be flagged as unknown.
+_OPEN_SUBTREES = (
+    "providers",
+    "catalog.providers",
+    "profiles.definitions",
+    "tune.backends",
+    "cost.pricing",
+    "judge.rubric",
+)
 
 
 def _validate_walk(user: Any, default: Any, prefix: str, out: list[str]) -> None:

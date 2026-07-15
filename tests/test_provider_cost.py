@@ -109,3 +109,43 @@ def test_response_format_absent_by_default(tmp_path, monkeypatch):
     spec = ModelSpec(name="x", provider="live", model="m")
     prov.complete(spec, [{"role": "user", "content": "hi"}], cache=False)
     assert "response_format" not in captured["body"]
+
+
+def test_exact_model_options_forwarded_without_core_overrides(tmp_path, monkeypatch):
+    from quorum.model import ModelSpec
+    cfg = mock_cfg(str(tmp_path / "t.db"))
+    cfg["providers"]["live"] = {
+        "base_url": "http://example.test/v1",
+        "api_key_env": "",
+        "model_options": {
+            "openai/gpt-oss-120b": {
+                "reasoning_effort": "low",
+                "include_reasoning": False,
+                "model": "must-not-win",
+                "max_tokens": 1,
+            },
+        },
+    }
+    prov = provider.for_config(cfg)
+    captured = []
+
+    def _fake_urlopen(req, timeout=0):
+        captured.append(json.loads(req.data))
+        return _FakeResp()
+
+    monkeypatch.setattr(provider.urllib.request, "urlopen", _fake_urlopen)
+    messages = [{"role": "user", "content": "hi"}]
+    prov.complete(ModelSpec("x", "live", "openai/gpt-oss-120b"), messages,
+                  max_tokens=700, cache=False)
+    prov.complete(ModelSpec("y", "live", "other/model"), messages,
+                  max_tokens=700, cache=False)
+
+    assert captured[0]["reasoning_effort"] == "low"
+    assert captured[0]["include_reasoning"] is False
+    assert captured[0]["model"] == "openai/gpt-oss-120b"
+    assert captured[0]["max_tokens"] == 700
+    assert "reasoning_effort" not in captured[1]
+
+
+def test_malformed_model_options_are_ignored():
+    assert provider._model_options({"model_options": ["not", "a", "mapping"]}, "m") == {}

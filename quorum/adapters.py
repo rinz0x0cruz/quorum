@@ -61,6 +61,8 @@ def host_config(cfg: dict) -> dict:
             "temperature": ai.get("temperature", 0.3),
             "max_tokens": ai.get("max_tokens", 700),
             "parallel": bool(q.get("parallel", False)),
+            "rate_limit_rpm": float(q.get("rate_limit_rpm", 0)),
+            "fallbacks": list(q.get("fallbacks") or []),
         },
         "promptsmith": {"enabled": False},
         "cost": {"budget_usd": float(q.get("budget_usd", 0.0))},

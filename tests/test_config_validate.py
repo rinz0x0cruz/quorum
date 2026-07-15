@@ -13,6 +13,9 @@ def test_validate_flags_typos():
 
 def test_validate_allows_open_subtrees():
     cfg = {"providers": {"myllm": {"base_url": "http://x", "custom": 1}},
+        "catalog": {"providers": {"myllm": {"catalog_url": "http://x/models"}}},
+        "profiles": {"definitions": {"security": {"strategy": "verify"}}},
+        "tune": {"backends": {"remote-gpu": {"command": ["trainer"]}}},
            "cost": {"pricing": {"my/model": {"input": 1}}},
            "judge": {"rubric": {"my_criterion": 0.5}}}
     assert validate_config(cfg) == []

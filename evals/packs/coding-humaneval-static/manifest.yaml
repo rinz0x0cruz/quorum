@@ -1,0 +1,38 @@
+schema_version: 1
+id: coding-humaneval-static
+version: 1.0.0
+use_case: coding
+license:
+  spdx: MIT
+  redistribution: true
+  training: true
+sources:
+- id: humaneval
+  url: https://raw.githubusercontent.com/openai/human-eval/6d43fb980f9fee3c892a914eda09951f772ad10d/data/HumanEval.jsonl.gz
+  revision: 6d43fb980f9fee3c892a914eda09951f772ad10d
+  files:
+  - path: humaneval/HumanEval.jsonl.gz
+    sha256: b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef
+    mutable: false
+- id: quorum-authored-coding
+  url: https://github.com/rinz0x0cruz/quorum/tree/main/evals/packs/coding-humaneval-static
+  revision: pack-1.0.0
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+  evaluation_only_sources:
+  - humaneval
+  executes_untrusted_code: false
+splits:
+  validation:
+    path: validation.json
+    fingerprint: sha256:2726e0525176c6865afc35d42079fdf7589972f41d56b48662a74eab779ca68a
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:707979b7cc183c96576c5c1158777dbdcfc72a26bb6d4dc4451c7b62fcada581
+  train:
+    path: train.json
+    fingerprint: sha256:8281ba732fbd75a466f8152cfe384e729e94d0a4eb3c89253c8f346911a83a7e

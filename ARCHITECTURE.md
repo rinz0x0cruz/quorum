@@ -73,11 +73,13 @@ Grouped by layer (all under `quorum/quorum/`).
 | `config.py` | `DEFAULT_CONFIG`, deep-merge loader, `.env`, accessors | `load_config`, `member_specs`, `role_spec`, `api_key` |
 | `store.py` | SQLite: sessions / ai_cache / bench / runs | `Store`, `save_session`, `ai_cache_*`, `top_sessions` |
 | `cost.py` | Token counting (optional tiktoken) + pricing/budget | `count_tokens`, `price`, `over_budget` |
+| `evalpacks.py` | Versioned pack loading, canonical fingerprints, provenance and split-isolation checks | `verify_pack`, `load_split`, `split_fingerprint` |
 
 ### Reporting & scaffolding
 | Module | Responsibility |
 |---|---|
 | `bench.py` | Run/aggregate a strategy comparison over a task set |
+| `datasets.py` | Explicit, checksummed source fetches and deterministic full/smoke pack preparation |
 | `render.py` | Self-contained offline HTML dashboard |
 | `format.py` | Plain-text transcript for `run`/`show` |
 | `exporter.py` | Export a session as JSON / CSV / Markdown |

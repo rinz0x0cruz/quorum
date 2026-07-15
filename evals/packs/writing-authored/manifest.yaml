@@ -1,0 +1,28 @@
+schema_version: 1
+id: writing-authored
+version: 1.0.0
+use_case: writing_summarization
+license:
+  spdx: MIT
+  redistribution: true
+  training: true
+sources:
+- id: quorum-authored-writing
+  url: https://github.com/rinz0x0cruz/quorum/tree/main/evals/packs/writing-authored
+  revision: pack-1.0.0
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+splits:
+  train:
+    path: train.json
+    fingerprint: sha256:f501800ed4aafd3bd7b2f3bacac98e5429dc16f04e4e3105f468d79a5de871b3
+  validation:
+    path: validation.json
+    fingerprint: sha256:da1aef2e0357ad84507a4b614f02eed06ab6ded24e86dd6b873108930c8a9a3d
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:fa71d56b05c765743253f65ce9a8439384c28f67c8b6b2c95db2ad103bbe70f6

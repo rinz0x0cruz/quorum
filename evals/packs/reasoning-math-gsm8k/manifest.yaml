@@ -1,0 +1,35 @@
+schema_version: 1
+id: reasoning-math-gsm8k
+version: 1.0.0
+use_case: reasoning_math
+license:
+  spdx: MIT
+  redistribution: true
+  training: true
+sources:
+- id: gsm8k
+  url: https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/train.jsonl
+  revision: 3101c7d5072418e28b9008a6636bde82a006892c
+  files:
+  - path: gsm8k/train.jsonl
+    sha256: 17f347dc51477c50d4efb83959dbb7c56297aba886e5544ee2aaed3024813465
+    mutable: false
+  - path: gsm8k/test.jsonl
+    sha256: 3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14
+    mutable: false
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+splits:
+  train:
+    path: train.json
+    fingerprint: sha256:3ea7e9c31a62732e71f0f36f28ce9bf39cc58e6b76397f33e8362cd0320bb40b
+  validation:
+    path: validation.json
+    fingerprint: sha256:e6e26abc01b73da24f4a4a64a646f54bb4740e5367ec7c934f69c5442e3804b6
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:e9f7cd3085e7c60a892d23703331e4e395f6b657091c655898fc91bbfb0c7c1f

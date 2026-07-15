@@ -1,0 +1,38 @@
+schema_version: 1
+id: extraction-banking77
+version: 1.0.0
+use_case: extraction_classification
+license:
+  spdx: CC-BY-4.0
+  redistribution: true
+  training: true
+sources:
+- id: banking77
+  url: https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data/train.csv
+  revision: 57ec275d8078af65b7731c2a98be812d844a6d6b
+  files:
+  - path: banking77/train.csv
+    sha256: b06e26ac675513959a63135f11b94ea7786ed02da65db93a5650d8838cbc664b
+    mutable: false
+  - path: banking77/test.csv
+    sha256: d12d6e3bc4c3103966ae786dc435913c0c563dfa328f5a3646d0e62cfeeb474d
+    mutable: false
+  - path: banking77/categories.json
+    sha256: 53261da888122daf2d120d925458631d9619e15d82e56052e7a42e535ce32b63
+    mutable: false
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+splits:
+  train:
+    path: train.json
+    fingerprint: sha256:f2dfd1f8416438c753b0a6d924b74fd3a2a3e929999686f854fa5fec85d74a2c
+  validation:
+    path: validation.json
+    fingerprint: sha256:cf34571746efbe8126bd9e7225d7840d3819313bda89333a9a9c7f3a164ce13c
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:f4b340861498a122eefe51cae6edf80ae16057f45c4ac994eba889ce359d1077

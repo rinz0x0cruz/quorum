@@ -191,3 +191,86 @@ class Session:
         self.tokens_in += turn.tokens_in
         self.tokens_out += turn.tokens_out
         self.cost_usd += turn.cost_usd
+
+
+# --------------------------------------------------------------------------
+# evaluation, promotion, and tuning records
+# --------------------------------------------------------------------------
+@dataclass
+class EvaluationRun:
+    """Immutable evaluation inputs plus the mutable lifecycle of one target run."""
+
+    id: str
+    target_type: str                         # model | profile
+    target_id: str                           # exact model ref or pinned profile id
+    pack_id: str
+    pack_version: str = ""
+    split: str = ""
+    status: str = "running"                 # running | ok | error | aborted
+    manifest: dict[str, Any] = field(default_factory=dict)
+    created: str = field(default_factory=now_iso)
+    completed: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class EvaluationSample:
+    """One target/task/repeat outcome within an :class:`EvaluationRun`."""
+
+    id: str
+    run_id: str
+    task_id: str
+    repeat_index: int = 0
+    requested_ref: str = ""
+    actual_ref: str = ""
+    status: str = "ok"
+    score: float = 0.0
+    match: Optional[float] = None
+    correct: Optional[bool] = None
+    error: str = ""
+    latency_ms: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cost_usd: float = 0.0
+    output: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ProfilePromotion:
+    """An append-only approval tying a pinned profile to evaluation evidence."""
+
+    id: str
+    profile_name: str
+    eval_run_id: str
+    profile_version: str = ""
+    manifest: dict[str, Any] = field(default_factory=dict)
+    approved_by: str = ""
+    created: str = field(default_factory=now_iso)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class TuneRun:
+    """Lifecycle and provenance for an optional prompt/router/weight tuning job."""
+
+    id: str
+    method: str                               # prompt | profile | router | sft | lora | dpo
+    backend: str
+    base_model: str = ""
+    status: str = "pending"                  # pending | running | ok | error | aborted
+    manifest: dict[str, Any] = field(default_factory=dict)
+    artifact: dict[str, Any] = field(default_factory=dict)
+    created: str = field(default_factory=now_iso)
+    completed: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
