@@ -7,6 +7,9 @@ Follows the claudebudget/jobscope pattern: one ``SCHEMA`` script, an
 * ``sessions``  - each deliberation, with summary columns + a full JSON blob
 * ``ai_cache``  - cached model responses (offline replay + cost savings)
 * ``bench``     - per (strategy, task) benchmark rows
+* ``eval_*``    - reproducible model/profile evaluation manifests + samples
+* ``profile_promotions`` - append-only approvals backed by an evaluation run
+* ``tune_runs`` - optional prompt/router/weight tuning job provenance
 * ``runs``      - a lightweight audit trail
 
 Everything is local to this machine; nothing is uploaded.
@@ -20,7 +23,8 @@ import threading
 import time
 from typing import Any, Optional
 
-from .model import Session
+from .model import (EvaluationRun, EvaluationSample, ProfilePromotion, Session,
+                    TuneRun)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -59,6 +63,54 @@ CREATE TABLE IF NOT EXISTS bench (
     match REAL,
     correct INTEGER
 );
+CREATE TABLE IF NOT EXISTS eval_runs (
+    id TEXT PRIMARY KEY,
+    created TEXT,
+    completed TEXT,
+    target_type TEXT,
+    target_id TEXT,
+    pack_id TEXT,
+    pack_version TEXT,
+    split TEXT,
+    status TEXT,
+    json TEXT
+);
+CREATE TABLE IF NOT EXISTS eval_samples (
+    id TEXT PRIMARY KEY,
+    run_id TEXT,
+    created TEXT,
+    task_id TEXT,
+    repeat_index INTEGER DEFAULT 0,
+    requested_ref TEXT,
+    actual_ref TEXT,
+    status TEXT,
+    score REAL DEFAULT 0,
+    match REAL,
+    correct INTEGER,
+    latency_ms INTEGER DEFAULT 0,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    cost_usd REAL DEFAULT 0,
+    json TEXT
+);
+CREATE TABLE IF NOT EXISTS profile_promotions (
+    id TEXT PRIMARY KEY,
+    created TEXT,
+    profile_name TEXT,
+    profile_version TEXT,
+    eval_run_id TEXT,
+    json TEXT
+);
+CREATE TABLE IF NOT EXISTS tune_runs (
+    id TEXT PRIMARY KEY,
+    created TEXT,
+    completed TEXT,
+    method TEXT,
+    backend TEXT,
+    base_model TEXT,
+    status TEXT,
+    json TEXT
+);
 CREATE TABLE IF NOT EXISTS runs (
     ts TEXT,
     action TEXT,
@@ -82,6 +134,10 @@ CREATE TABLE IF NOT EXISTS api_calls (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created DESC);
 CREATE INDEX IF NOT EXISTS idx_bench_strategy ON bench(strategy);
+CREATE INDEX IF NOT EXISTS idx_eval_runs_pack ON eval_runs(pack_id, split);
+CREATE INDEX IF NOT EXISTS idx_eval_samples_run ON eval_samples(run_id);
+CREATE INDEX IF NOT EXISTS idx_profile_promotions_name ON profile_promotions(profile_name, created DESC);
+CREATE INDEX IF NOT EXISTS idx_tune_runs_created ON tune_runs(created DESC);
 CREATE INDEX IF NOT EXISTS idx_api_calls_ts ON api_calls(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_api_calls_model ON api_calls(model);
 """
@@ -209,6 +265,137 @@ class Store:
     def bench_rows(self) -> list[dict[str, Any]]:
         rows = self.conn.execute("SELECT * FROM bench ORDER BY ts DESC").fetchall()
         return [dict(r) for r in rows]
+
+    # ---- model/profile evaluation --------------------------------------
+    def save_eval_run(self, run: EvaluationRun) -> None:
+        """Create or update an evaluation run's lifecycle and manifest."""
+        d = run.to_dict()
+        with self._lock:
+            existing = self.conn.execute(
+                "SELECT json FROM eval_runs WHERE id = ?", (d["id"],)
+            ).fetchone()
+            if existing:
+                prior = json.loads(existing["json"])
+                immutable = ("created", "target_type", "target_id", "pack_id",
+                             "pack_version", "split", "manifest")
+                if any(prior.get(key) != d.get(key) for key in immutable):
+                    raise ValueError(f"evaluation run '{d['id']}' manifest is immutable")
+            self.conn.execute(
+                "INSERT INTO eval_runs (id, created, completed, target_type, target_id, "
+                "pack_id, pack_version, split, status, json) VALUES (?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET completed=excluded.completed, "
+                "status=excluded.status, json=excluded.json",
+                (d["id"], d["created"], d["completed"], d["target_type"], d["target_id"],
+                 d["pack_id"], d["pack_version"], d["split"], d["status"], json.dumps(d)),
+            )
+            self.conn.commit()
+
+    def get_eval_run(self, run_id: str) -> Optional[dict[str, Any]]:
+        row = self.conn.execute("SELECT json FROM eval_runs WHERE id = ?", (run_id,)).fetchone()
+        return json.loads(row["json"]) if row else None
+
+    def eval_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT json FROM eval_runs ORDER BY created DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [json.loads(r["json"]) for r in rows]
+
+    def save_eval_sample(self, sample: EvaluationSample) -> None:
+        """Upsert one target/task/repeat result; safe for parallel evaluators."""
+        d = sample.to_dict()
+        with self._lock:
+            existing = self.conn.execute(
+                "SELECT json FROM eval_samples WHERE id = ?", (d["id"],)
+            ).fetchone()
+            if existing:
+                prior = json.loads(existing["json"])
+                immutable = ("run_id", "created", "task_id", "repeat_index", "requested_ref")
+                if any(prior.get(key) != d.get(key) for key in immutable):
+                    raise ValueError(f"evaluation sample '{d['id']}' identity is immutable")
+            self.conn.execute(
+                "INSERT INTO eval_samples (id, run_id, created, task_id, repeat_index, "
+                "requested_ref, actual_ref, status, score, match, correct, latency_ms, "
+                "tokens_in, tokens_out, cost_usd, json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET actual_ref=excluded.actual_ref, "
+                "status=excluded.status, score=excluded.score, match=excluded.match, "
+                "correct=excluded.correct, latency_ms=excluded.latency_ms, "
+                "tokens_in=excluded.tokens_in, tokens_out=excluded.tokens_out, "
+                "cost_usd=excluded.cost_usd, json=excluded.json",
+                (d["id"], d["run_id"], d["created"], d["task_id"], d["repeat_index"],
+                 d["requested_ref"], d["actual_ref"], d["status"], d["score"], d["match"],
+                 None if d["correct"] is None else int(d["correct"]), d["latency_ms"],
+                 d["tokens_in"], d["tokens_out"], d["cost_usd"], json.dumps(d)),
+            )
+            self.conn.commit()
+
+    def eval_samples(self, run_id: Optional[str] = None) -> list[dict[str, Any]]:
+        if run_id is None:
+            rows = self.conn.execute(
+                "SELECT json FROM eval_samples ORDER BY created, id"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT json FROM eval_samples WHERE run_id = ? ORDER BY created, id", (run_id,)
+            ).fetchall()
+        return [json.loads(r["json"]) for r in rows]
+
+    # ---- approved profiles --------------------------------------------
+    def add_profile_promotion(self, promotion: ProfilePromotion) -> None:
+        """Append an approval record; duplicate ids are rejected, never overwritten."""
+        d = promotion.to_dict()
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO profile_promotions (id, created, profile_name, profile_version, "
+                "eval_run_id, json) VALUES (?,?,?,?,?,?)",
+                (d["id"], d["created"], d["profile_name"], d["profile_version"],
+                 d["eval_run_id"], json.dumps(d)),
+            )
+            self.conn.commit()
+
+    def profile_promotions(self, profile_name: Optional[str] = None) -> list[dict[str, Any]]:
+        if profile_name is None:
+            rows = self.conn.execute(
+                "SELECT json FROM profile_promotions ORDER BY created DESC"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT json FROM profile_promotions WHERE profile_name = ? ORDER BY created DESC",
+                (profile_name,),
+            ).fetchall()
+        return [json.loads(r["json"]) for r in rows]
+
+    # ---- optional tuning jobs -----------------------------------------
+    def save_tune_run(self, run: TuneRun) -> None:
+        """Create or update an optional tuning job without loading its backend."""
+        d = run.to_dict()
+        with self._lock:
+            existing = self.conn.execute(
+                "SELECT json FROM tune_runs WHERE id = ?", (d["id"],)
+            ).fetchone()
+            if existing:
+                prior = json.loads(existing["json"])
+                immutable = ("created", "method", "backend", "base_model", "manifest")
+                if any(prior.get(key) != d.get(key) for key in immutable):
+                    raise ValueError(f"tune run '{d['id']}' manifest is immutable")
+            self.conn.execute(
+                "INSERT INTO tune_runs (id, created, completed, method, backend, base_model, "
+                "status, json) VALUES (?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET completed=excluded.completed, "
+                "status=excluded.status, json=excluded.json",
+                (d["id"], d["created"], d["completed"], d["method"], d["backend"],
+                 d["base_model"], d["status"], json.dumps(d)),
+            )
+            self.conn.commit()
+
+    def get_tune_run(self, run_id: str) -> Optional[dict[str, Any]]:
+        row = self.conn.execute("SELECT json FROM tune_runs WHERE id = ?", (run_id,)).fetchone()
+        return json.loads(row["json"]) if row else None
+
+    def tune_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT json FROM tune_runs ORDER BY created DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [json.loads(r["json"]) for r in rows]
 
     # ---- runs -----------------------------------------------------------
     def add_run(self, action: str, count: int, status: str = "ok") -> None:

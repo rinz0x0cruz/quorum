@@ -14,6 +14,16 @@ def test_load_config_defaults():
     assert "mock" in cfg["providers"]
 
 
+def test_new_workflows_are_default_off():
+    cfg = load_config(None)
+    assert cfg["catalog"]["enabled"] is False
+    assert cfg["evaluation"]["enabled"] is False
+    assert cfg["profiles"]["enabled"] is False
+    assert cfg["routing"]["enabled"] is False
+    assert cfg["decision"]["mode"] == "single"
+    assert cfg["tune"]["enabled"] is False
+
+
 def test_parse_ref_keeps_model_colons():
     # OpenRouter free-model ids carry a ':free' suffix; only the first colon splits.
     assert parse_ref("openrouter:meta-llama/llama-3.1-8b-instruct:free") == (

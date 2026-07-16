@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quorum"
-version = "0.1.0"
+version = "0.3.0"
 description = "Multi-model deliberation: design/refine a prompt, then debate a solution across several AI models (debate+judge, council+chairman, mixture-of-agents) until a judge scores it good enough. Provider-agnostic, offline-testable, local-only."
 readme = "README.md"
 requires-python = ">=3.11"

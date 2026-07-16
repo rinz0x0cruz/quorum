@@ -8,16 +8,16 @@
 # Ollama model, OpenAI, Groq, ... -- you own the roster.
 council:
   members:
-    - { name: alice, provider: openrouter, model: meta-llama/llama-3.3-70b-instruct:free }
-    - { name: bob,   provider: openrouter, model: qwen/qwen3-next-80b-a3b-instruct:free }
-    - { name: carol, provider: openrouter, model: google/gemma-4-31b-it:free }
+    - { name: alice, provider: openrouter, model: nvidia/nemotron-3-ultra-550b-a55b:free }
+    - { name: bob,   provider: openrouter, model: google/gemma-4-31b-it:free }
+    - { name: carol, provider: openrouter, model: openai/gpt-oss-20b:free }
     # Optionally give a member its own fallback chain (tried in order if its call
     # fails, e.g. a free tier returns 429). Overrides run.fallbacks for that member.
     # - { name: dave, provider: openrouter, model: some/model:free, fallbacks: [openrouter:another/model, groq:llama-3.1-70b] }
   # Single-model roles, referenced as "provider:model". Empty -> first member.
-  judge:      openrouter:openai/gpt-oss-120b:free
-  chairman:   openrouter:openai/gpt-oss-120b:free
-  aggregator: openrouter:openai/gpt-oss-120b:free
+  judge:      openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
+  chairman:   openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
+  aggregator: openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
   # Per-role fallbacks (optional): judge_fallbacks / chairman_fallbacks / aggregator_fallbacks
   # judge_fallbacks: [openrouter:google/gemma-4-31b-it:free]
 
@@ -26,9 +26,61 @@ council:
 providers:
   openrouter: { base_url: https://openrouter.ai/api/v1, api_key_env: QUORUM_OPENROUTER_KEY }
   openai:     { base_url: https://api.openai.com/v1,    api_key_env: QUORUM_OPENAI_KEY }
-  groq:       { base_url: https://api.groq.com/openai/v1, api_key_env: QUORUM_GROQ_KEY }
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: QUORUM_GROQ_KEY
+    # Optional exact-model request controls; empty preserves provider defaults.
+    # Useful for reasoning models whose thinking shares the completion budget.
+    model_options: {}
+    # model_options:
+    #   openai/gpt-oss-120b: { reasoning_effort: low, include_reasoning: false }
   ollama:     { base_url: http://localhost:11434/v1,   api_key_env: "" }   # local, keyless
   mock:       { base_url: "", api_key_env: "" }                            # offline
+
+# Evaluation-driven workflows are all opt-in. Catalog discovery never changes
+# the pinned council/profile configuration automatically.
+catalog:
+  enabled: false
+  cache_dir: data/catalogs
+  providers: {}
+  allow_preview: false
+  expiry_horizon_days: 14
+  access_classes: [zero_price, free_quota, local]
+
+evaluation:
+  enabled: false
+  packs_dir: evals
+  repeats: 1
+  min_promotion_samples: 30
+  min_served_rate: 0.95
+  bootstrap_samples: 2000
+
+profiles:
+  enabled: false
+  active: ""
+  paths: []
+  definitions: {}
+
+routing:
+  enabled: false
+  rules: []
+  learned: false
+  artifact: ""
+  min_confidence: 0.8
+
+decision:
+  mode: single              # single preserves the current judge behavior
+  jurors: []
+  min_ballots: 3
+  min_families: 3
+  preserve_dissent: true
+
+tune:
+  enabled: false
+  backend: mock
+  backends: {}
+  output_dir: data/tuning
+  python: ""
 
 run:
   strategy: refine         # debate | council | moa | refine | ensemble  (refine: best cost/accuracy in eval)

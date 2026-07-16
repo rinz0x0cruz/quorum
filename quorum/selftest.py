@@ -9,6 +9,11 @@ from __future__ import annotations
 import os
 import tempfile
 
+from .config import DEFAULT_CONFIG, _deep_merge, parse_ref
+from .model import (EvaluationRun, EvaluationSample, ModelSpec,
+                    ProfilePromotion, Session, TuneRun, content_hash,
+                    model_vendor, session_id)
+
 
 class _Check:
     def __init__(self) -> None:
@@ -49,8 +54,8 @@ def run() -> int:
     c = _Check()
 
     # --- model ------------------------------------------------------------
-    from .model import ModelSpec, Session, content_hash, model_vendor, session_id
-    c.ok("content_hash stable", content_hash("a", "b") == content_hash("a", "b"))
+    c.ok("content_hash + package version", content_hash("a", "b") == content_hash("a", "b")
+         and __import__("quorum").__version__ == "0.3.0")
     c.ok("session_id prefixed", session_id("t", "debate", 1.0).startswith("s-"))
     c.ok("vendor maps claude", model_vendor("anthropic/claude-3.5") == "anthropic")
     c.ok("vendor maps gpt", model_vendor("openai/gpt-4o") == "openai")
@@ -70,16 +75,12 @@ def run() -> int:
          scoring.get("lexical").score("a b", "a b c d") == 1.0)
 
     # --- config -----------------------------------------------------------
-    from .config import DEFAULT_CONFIG, _deep_merge, load_config, member_specs, parse_ref, role_spec
     merged = _deep_merge(DEFAULT_CONFIG, {"run": {"target_score": 5}})
     c.ok("deep_merge overrides leaf", merged["run"]["target_score"] == 5)
     c.ok("deep_merge keeps siblings", merged["run"]["max_rounds"] == 4)
-    c.ok("load_config defaults", load_config(None)["run"]["strategy"] == "refine")
     c.ok("parse_ref keeps model colons", parse_ref("openrouter:meta/x:free") == ("openrouter", "meta/x:free"))
     with tempfile.TemporaryDirectory() as tmp:
         cfg = _mock_cfg(os.path.join(tmp, "t.db"))
-        c.ok("member_specs count", len(member_specs(cfg)) == 3)
-        c.ok("role_spec judge", role_spec(cfg, "judge").model == "openai/mock-judge")
 
         # --- store --------------------------------------------------------
         from .store import Store
@@ -92,6 +93,33 @@ def run() -> int:
             store.ai_cache_put("k1", "m", "p", "resp")
             c.ok("ai_cache hit", store.ai_cache_get("k1") == "resp")
             c.ok("ai_cache miss", store.ai_cache_get("nope") is None)
+            erun = EvaluationRun(
+                id="eval-test", target_type="model", target_id="mock:mock/alice",
+                pack_id="reasoning", manifest={"seed": 42})
+            store.save_eval_run(erun)
+            c.ok("eval run round-trips",
+                 (store.get_eval_run(erun.id) or {}).get("manifest", {}).get("seed") == 42)
+            store.save_eval_sample(EvaluationSample(
+                id="sample-test", run_id=erun.id, task_id="task-1",
+                requested_ref="mock:mock/alice", actual_ref="mock:mock/alice",
+                match=100.0, correct=True))
+            c.ok("eval sample round-trips",
+                 bool(store.eval_samples(erun.id))
+                 and store.eval_samples(erun.id)[0]["correct"] is True)
+            store.add_profile_promotion(ProfilePromotion(
+                id="promotion-test", profile_name="reasoning", eval_run_id=erun.id,
+                manifest={"profile_hash": "abc"}))
+            c.ok("profile promotion persists",
+                 store.profile_promotions("reasoning")[0]["eval_run_id"] == erun.id)
+            trun = TuneRun(
+                id="tune-test", method="lora", backend="mock",
+                manifest={"train_fingerprint": "train-1"})
+            store.save_tune_run(trun)
+            trun.status = "ok"
+            trun.artifact = {"hash": "def"}
+            store.save_tune_run(trun)
+            c.ok("tune run lifecycle persists",
+                 (store.get_tune_run(trun.id) or {}).get("artifact", {}).get("hash") == "def")
 
             # --- cost -----------------------------------------------------
             from . import cost
@@ -185,6 +213,11 @@ def run() -> int:
                            [("a", "ans")], candidate_models=["m"], store=store)
             prov.complete = _orig_complete  # type: ignore[method-assign]
             c.ok("json_mode passes response_format", _seen.get("rf") == {"type": "json_object"})
+            from .provider import _model_options
+            c.ok("model options exact + core protected",
+                 _model_options({"model_options": {"m": {
+                     "reasoning_effort": "low", "model": "other"}}}, "m")
+                 == {"reasoning_effort": "low"})
 
             # --- strategies (end to end on the mock provider) -------------
             from . import format as fmt

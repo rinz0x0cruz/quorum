@@ -1,0 +1,42 @@
+schema_version: 1
+id: research-openalex
+version: 1.0.0
+use_case: research_synthesis
+license:
+  spdx: CC0-1.0
+  redistribution: true
+  training: true
+sources:
+- id: openalex
+  url: https://api.openalex.org/works
+  revision: observed-2026-07-15
+  files:
+  - path: openalex/W4400141368.json
+    sha256: c259a0b0a753694095338f70978c3d36b632a62d030eec97bf207b845e0d20b7
+  - path: openalex/W4376122773.json
+    sha256: 6bab46d56fdfe4c7937af3af651d6a6fd22ced86ad1146ad2d6c69208820933c
+  - path: openalex/W4392971790.json
+    sha256: b6d6ed7b8cf23235500cd46daa0c8616c3c015644f8daf37012d5fd70b144ebc
+  - path: openalex/W4396570275.json
+    sha256: 3ae02cc4bd89d7a15f8db82f45e2af2ee14f2f0f46cbb6743b3cb772adc9570d
+  - path: openalex/W4399511904.json
+    sha256: 518f551ab18fb3fd1d769c5a5e0904005d276b81314c3450496ba5516aa2603f
+  - path: openalex/W4389217455.json
+    sha256: 9b17412a65752ce23b69cc52be4e415c45836958e4018fddc27b14dfae918e2d
+default_metric: deterministic_match
+governance:
+  training_splits:
+  - train
+  sealed_splits:
+  - promotion_test
+  context_is_snapshotted: true
+splits:
+  train:
+    path: train.json
+    fingerprint: sha256:04823f4f827c4917ef3d97af34b8a3410be8a8398d728548f4c02b438f45089f
+  validation:
+    path: validation.json
+    fingerprint: sha256:23698fa5ec225483bbaac4ff8fef61789f9a2a8a43fc987e6ff50cde18750a97
+  promotion_test:
+    path: promotion_test.json
+    fingerprint: sha256:4d8ab8f04a61193f7cffda65d3636333cb2c5b21b16f894583649ab33f8c4ec1

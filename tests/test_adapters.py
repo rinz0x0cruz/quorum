@@ -20,6 +20,26 @@ def test_host_config_maps_ai_and_quorum_blocks():
     assert q["council"]["judge"] == "mock:mock/m1"
 
 
+def test_host_config_maps_rate_limit_and_fallbacks():
+    cfg = host_cfg()
+    cfg["quorum"].update({
+        "rate_limit_rpm": 18,
+        "fallbacks": ["mock:mock/fallback"],
+    })
+    q = adapters.host_config(cfg)
+    assert q["run"]["rate_limit_rpm"] == 18
+    assert q["run"]["fallbacks"] == ["mock:mock/fallback"]
+
+
+def test_host_config_maps_exact_model_options():
+    cfg = host_cfg()
+    cfg["ai"]["model_options"] = {
+        "mock/m1": {"reasoning_effort": "low", "include_reasoning": False},
+    }
+    q = adapters.host_config(cfg)
+    assert q["providers"]["mock"]["model_options"] == cfg["ai"]["model_options"]
+
+
 def test_api_build_config_delegates_to_adapter():
     """api.build_config is now a thin wrapper -- identical output to the adapter."""
     cfg = host_cfg()

@@ -42,7 +42,8 @@ def host_config(cfg: dict) -> dict:
     role = f"{provider}:{model}"
 
     providers = {provider: {"base_url": ai.get("base_url", ""),
-                            "api_key_env": ai.get("api_key_env", "")}}
+                            "api_key_env": ai.get("api_key_env", ""),
+                            "model_options": ai.get("model_options") or {}}}
     providers.update(q.get("providers") or {})
     members = q.get("members") or [{"name": "m1", "provider": provider, "model": model}]
 
@@ -61,6 +62,8 @@ def host_config(cfg: dict) -> dict:
             "temperature": ai.get("temperature", 0.3),
             "max_tokens": ai.get("max_tokens", 700),
             "parallel": bool(q.get("parallel", False)),
+            "rate_limit_rpm": float(q.get("rate_limit_rpm", 0)),
+            "fallbacks": list(q.get("fallbacks") or []),
         },
         "promptsmith": {"enabled": False},
         "cost": {"budget_usd": float(q.get("budget_usd", 0.0))},
